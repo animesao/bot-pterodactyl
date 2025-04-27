@@ -1,0 +1,18 @@
+[
+  {
+    "timestamp": "2025-04-20T08:15:50.304173",
+    "ticket_id": 1363427931262681128,
+    "ticket_name": "ticket-thediamond5",
+    "action": "Создан",
+    "user_name": "thediamond5",
+    "reason": "Р"
+  },
+  {
+    "timestamp": "2025-04-20T08:16:08.940118",
+    "ticket_id": 1363427931262681128,
+    "ticket_name": "ticket-thediamond5",
+    "action": "Закрыт",
+    "user_name": "thediamond5",
+    "reason": "П"
+  }
+]

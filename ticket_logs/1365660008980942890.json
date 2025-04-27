@@ -1,0 +1,47 @@
+[
+  {
+    "timestamp": "2025-04-26T12:05:19.618238",
+    "ticket_id": 1365660008980942890,
+    "ticket_name": "ticket-animesao",
+    "action": "Создан",
+    "user_id": 1035507808378028053,
+    "user_name": "animesao",
+    "reason": "REWR\nEW"
+  },
+  {
+    "timestamp": "2025-04-26T12:05:25.607845",
+    "ticket_id": 1365660008980942890,
+    "ticket_name": "ticket-animesao",
+    "action": "Назначен ответственный",
+    "user_id": 1035507808378028053,
+    "user_name": "animesao",
+    "reason": null
+  },
+  {
+    "timestamp": "2025-04-26T12:05:31.140293",
+    "ticket_id": 1365660008980942890,
+    "ticket_name": "ticket-animesao",
+    "action": "Назначен ответственный",
+    "user_id": 1035507808378028053,
+    "user_name": "animesao",
+    "reason": null
+  },
+  {
+    "timestamp": "2025-04-26T12:05:56.172046",
+    "ticket_id": 1365660008980942890,
+    "ticket_name": "ticket-animesao",
+    "action": "Закрыт",
+    "user_id": 1035507808378028053,
+    "user_name": "animesao",
+    "reason": "HJJH"
+  },
+  {
+    "timestamp": "2025-04-26T12:06:05.778397",
+    "ticket_id": 1365660008980942890,
+    "ticket_name": "ticket-animesao",
+    "action": "Закрыт",
+    "user_id": 1035507808378028053,
+    "user_name": "animesao",
+    "reason": "HJJH"
+  }
+]

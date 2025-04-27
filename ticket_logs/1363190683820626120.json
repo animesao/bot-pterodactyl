@@ -1,0 +1,20 @@
+[
+  {
+    "timestamp": "2025-04-19T16:33:06.107625",
+    "ticket_id": 1363190683820626120,
+    "ticket_name": "ticket-animesao",
+    "action": "Создан",
+    "user_id": 1035507808378028053,
+    "user_name": "animesao",
+    "reason": "eweq"
+  },
+  {
+    "timestamp": "2025-04-19T16:33:26.035299",
+    "ticket_id": 1363190683820626120,
+    "ticket_name": "ticket-animesao",
+    "action": "Закрыт",
+    "user_id": 1035507808378028053,
+    "user_name": "animesao",
+    "reason": "rewr"
+  }
+]

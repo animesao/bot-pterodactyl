@@ -1,0 +1,18 @@
+[
+  {
+    "timestamp": "2025-04-22T01:24:40.855923",
+    "ticket_id": 1364049234759913598,
+    "ticket_name": "ticket-animesao",
+    "action": "Создан",
+    "user_name": "animesao",
+    "reason": "Teat"
+  },
+  {
+    "timestamp": "2025-04-22T01:25:30.354110",
+    "ticket_id": 1364049234759913598,
+    "ticket_name": "ticket-animesao",
+    "action": "Закрыт",
+    "user_name": "animesao",
+    "reason": "Test"
+  }
+]
