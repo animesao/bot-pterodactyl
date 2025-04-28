@@ -36,7 +36,8 @@ class PterodactylStatus(commands.Cog):
                         panel_online = resp.status == 200
                         if panel_online:
                             node = (await resp.json())["attributes"]
-                            node_online = node.get("maintenance_mode", 1) == 0
+                            maintenance_mode = node.get("maintenance_mode", 1)
+                            node_online = maintenance_mode == 0
                         else:
                             node_online = False
                 except:
@@ -55,7 +56,13 @@ class PterodactylStatus(commands.Cog):
                 embed.add_field(name="Статус панели", value=panel_status, inline=False)
 
                 # Статус ноды
-                node_status = "🟢 Нода-1: Включена" if node_online else "🔴 Нода-1: Выключена"
+                if panel_online:
+                    if maintenance_mode == 1:
+                        node_status = "🟡 Нода-1: Техническое обслуживание"
+                    else:
+                        node_status = "🟢 Нода-1: Включена"
+                else:
+                    node_status = "🔴 Нода-1: Выключена"
                 embed.add_field(name="Статус ноды", value=node_status, inline=False)
 
                 embed.set_footer(
