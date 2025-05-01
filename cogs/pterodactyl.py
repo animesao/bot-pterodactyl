@@ -24,7 +24,7 @@ class PterodactylStatus(commands.Cog):
     def cog_unload(self):
         self.update_status.cancel()
 
-    @tasks.loop(seconds=1)
+    @tasks.loop(seconds=5)
     async def update_status(self):
         try:
             async with aiohttp.ClientSession() as session:
