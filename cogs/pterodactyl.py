@@ -15,8 +15,8 @@ class PterodactylStatus(commands.Cog):
         self.api_url_2 = "http://DOMEN/api/application"
         self.api_key = "Application API"
         self.api_key_2 = "Application API"
-        self.node_id = 1
-        self.node_id_2 = 3
+        self.node_id = ID
+        self.node_id_2 = ID
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
         self.status_message_id = None
         self.update_status.start()
@@ -24,7 +24,7 @@ class PterodactylStatus(commands.Cog):
     def cog_unload(self):
         self.update_status.cancel()
 
-    @tasks.loop(seconds=5)
+    @tasks.loop(seconds=1)
     async def update_status(self):
         try:
             async with aiohttp.ClientSession() as session:
@@ -93,7 +93,7 @@ class PterodactylStatus(commands.Cog):
                     node_status = "🟢 Нода-1: Включена"
                 else:
                     node_status = "🔴 Нода-1: Выключена"
-                embed.add_field(name="Статус ноды 1", value=node_status, inline=False)
+                embed.add_field(name="Статус нод", value=node_status, inline=False)
 
                 # Статус ноды 2
                 if not panel_online:
@@ -104,7 +104,7 @@ class PterodactylStatus(commands.Cog):
                     node2_status = "🟢 Нода-2: Включена"
                 else:
                     node2_status = "🔴 Нода-2: Выключена"
-                embed.add_field(name="Статус ноды 2", value=node2_status, inline=False)
+                embed.add_field(name="", value=node2_status, inline=False)
 
                 embed.set_footer(
                     text=f"Последнее обновление: {datetime.datetime.now().strftime('%H:%M:%S')}",
