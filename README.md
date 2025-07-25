@@ -12,9 +12,9 @@ cd bot-pterodacty
 
 
 ```
-=
+.
                      bot-pterodacty UPDATES
-=
+
 
 [RU] Русская версия
 -------------------
@@ -60,6 +60,6 @@ Version 1.2.0 (Latest Update)
 - Improved command autocomplete
 - Optimized memory usage
 
-======
+
 2025 | Project maintained by animesao
-======
+
