@@ -25,7 +25,7 @@ cd bot-pterodacty
   * Привязки Discord-бота к панели Pterodactyl
   * Авторизации через discord-ptero 1.0 - BETA
   * Автоматической настройки прав доступа
-- Реализован мониторинг серверов через /status
+- Реализован мониторинг серверов через /setup_pterodactyl_status
 
 * УЛУЧШЕНИЯ *
 - Оптимизирована интеграция с GitHub API
@@ -48,7 +48,7 @@ Version 1.2.0 (Latest Update)
   * Linking Discord bot to Pterodactyl panel
   * discord-ptero 1.0 - BETA authorization
   * Automatic permissions setup
-- Implemented server monitoring via /status
+- Implemented server monitoring via /setup_pterodactyl_status
 
 * IMPROVEMENTS *
 - Optimized GitHub API integration
