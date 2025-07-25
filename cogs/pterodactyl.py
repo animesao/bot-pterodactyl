@@ -15,8 +15,8 @@ class PterodactylStatus(commands.Cog):
         self.api_url_2 = "http://DOMEN/api/application"
         self.api_key = "Application API"
         self.api_key_2 = "Application API"
-        self.node_id = ID
-        self.node_id_2 = ID
+        self.node_id = "ID"
+        self.node_id_2 = "ID"
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
         self.status_message_id = None
         self.update_status.start()
@@ -139,6 +139,87 @@ class PterodactylStatus(commands.Cog):
         msg = await channel.send(embed=embed)
         self.status_message_id = msg.id
 
+    class PterodactylRegisterModal(disnake.ui.Modal):
+        def __init__(self, cog):
+            self.cog = cog
+            components = [
+                disnake.ui.TextInput(
+                    label="Имя пользователя",
+                    placeholder="Введите желаемый username",
+                    custom_id="username",
+                    style=disnake.TextInputStyle.short,
+                    required=True,
+                    max_length=32
+                ),
+                disnake.ui.TextInput(
+                    label="Email",
+                    placeholder="Введите ваш email",
+                    custom_id="email",
+                    style=disnake.TextInputStyle.short,
+                    required=True,
+                    max_length=100
+                ),
+                disnake.ui.TextInput(
+                    label="Пароль",
+                    placeholder="Введите желаемый пароль (минимум 8 символов)",
+                    custom_id="password",
+                    style=disnake.TextInputStyle.short,
+                    required=True,
+                    min_length=8,
+                    max_length=64
+                )
+            ]
+            super().__init__(
+                title="Регистрация в панели Pterodactyl",
+                custom_id="pterodactyl_register",
+                components=components
+            )
+
+        async def callback(self, inter: disnake.ModalInteraction):
+            username = inter.text_values["username"]
+            email = inter.text_values["email"]
+            password = inter.text_values["password"]
+            try:
+                async with aiohttp.ClientSession() as session:
+                    headers = {
+                        "Authorization": f"Bearer {self.cog.api_key}",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    }
+                    # Проверка: есть ли уже пользователь с таким email
+                    check_url = f"{self.cog.api_url}/users?filter[email]={email}"
+                    async with session.get(check_url, headers=headers) as check_resp:
+                        if check_resp.status == 200:
+                            data = await check_resp.json()
+                            if data.get("data"):
+                                await inter.response.send_message(
+                                    "❌ На этот Discord-аккаунт уже зарегистрирован пользователь в панели.",
+                                    ephemeral=True
+                                )
+                                return
+                    # Если не найден — создаём
+                    payload = {
+                        "username": username,
+                        "email": email,
+                        "first_name": str(inter.author),
+                        "last_name": "discord",
+                        "password": password
+                    }
+                    async with session.post(f"{self.cog.api_url}/users", headers=headers, json=payload) as resp:
+                        if resp.status == 201:
+                            await inter.response.send_message(
+                                f"✅ Аккаунт успешно зарегистрирован!\nЛогин: `{username}`\nEmail: `{email}`\nПароль: `{password}`",
+                                ephemeral=True
+                            )
+                        else:
+                            data = await resp.text()
+                            await inter.response.send_message(
+                                f"❌ Не удалось зарегистрировать аккаунт. Код: {resp.status}\n{data}",
+                                ephemeral=True
+                            )
+            except Exception as e:
+                await inter.response.send_message(f"❌ Ошибка при регистрации: {e}", ephemeral=True)
+
     @commands.slash_command(name="setup_pterodactyl_status", description="Настроить панель мониторинга Pterodactyl")
     @commands.has_permissions(administrator=True)
     async def setup_pterodactyl_status(self, inter: disnake.ApplicationCommandInteraction):
@@ -147,6 +228,11 @@ class PterodactylStatus(commands.Cog):
         self.status_message_id = msg.id
         self.status_channel_id = inter.channel.id
         await inter.response.send_message("Панель мониторинга HallCloud успешно создана!", ephemeral=True)
+
+    @commands.slash_command(name="register", description="Зарегистрироваться в панели Pterodactyl")
+    async def register(self, inter: disnake.ApplicationCommandInteraction):
+        modal = self.PterodactylRegisterModal(self)
+        await inter.response.send_modal(modal)
 
 def setup(bot):
     bot.add_cog(PterodactylStatus(bot))
