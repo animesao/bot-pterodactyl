@@ -23,7 +23,7 @@ cd bot-pterodacty
 * НОВЫЕ ФУНКЦИИ *
 - Добавлена команда /register для:
   * Привязки Discord-бота к панели Pterodactyl
-  * Авторизации через GitHub OAuth 2.0
+  * Авторизации через discord-ptero 1.0 - BETA
   * Автоматической настройки прав доступа
 - Реализован мониторинг серверов через /status
 
@@ -46,7 +46,7 @@ Version 1.2.0 (Latest Update)
 * NEW FEATURES *
 - Added /register command for:
   * Linking Discord bot to Pterodactyl panel
-  * GitHub OAuth 2.0 authorization
+  * discord-ptero 1.0 - BETA authorization
   * Automatic permissions setup
 - Implemented server monitoring via /status
 
@@ -61,6 +61,6 @@ Version 1.2.0 (Latest Update)
 - Optimized memory usage
 
 ================================================================
-2023 | Project maintained by animesao
+2025 | Project maintained by animesao
 ================================================================
 ```
