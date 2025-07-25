@@ -19,6 +19,7 @@ class PterodactylStatus(commands.Cog):
         self.node_id_2 = "ID"
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
         self.status_message_id = None
+        self.discord_limit = int(os.getenv("PTERODACTYL_DISCORD_LIMIT", 1))
         self.update_status.start()
 
     def cog_unload(self):
@@ -179,6 +180,7 @@ class PterodactylStatus(commands.Cog):
             username = inter.text_values["username"]
             email = inter.text_values["email"]
             password = inter.text_values["password"]
+            discord_id = str(inter.author.id)
             try:
                 async with aiohttp.ClientSession() as session:
                     headers = {
@@ -187,13 +189,25 @@ class PterodactylStatus(commands.Cog):
                         "Accept": "application/json"
                     }
                     # Проверка: есть ли уже пользователь с таким email
-                    check_url = f"{self.cog.api_url}/users?filter[email]={email}"
-                    async with session.get(check_url, headers=headers) as check_resp:
-                        if check_resp.status == 200:
-                            data = await check_resp.json()
-                            if data.get("data"):
+                    check_url_email = f"{self.cog.api_url}/users?filter[email]={email}"
+                    async with session.get(check_url_email, headers=headers) as check_resp_email:
+                        if check_resp_email.status == 200:
+                            data_email = await check_resp_email.json()
+                            if data_email.get("data"):
                                 await inter.response.send_message(
-                                    "❌ На этот Discord-аккаунт уже зарегистрирован пользователь в панели.",
+                                    "❌ На этот email уже зарегистрирован пользователь в панели.",
+                                    ephemeral=True
+                                )
+                                return
+                    # Проверка: сколько пользователей с таким Discord ID (в поле first_name)
+                    check_url_id = f"{self.cog.api_url}/users?filter[first_name]={discord_id}"
+                    async with session.get(check_url_id, headers=headers) as check_resp_id:
+                        if check_resp_id.status == 200:
+                            data_id = await check_resp_id.json()
+                            count = len(data_id.get("data", []))
+                            if count >= self.cog.discord_limit:
+                                await inter.response.send_message(
+                                    f"❌ Достигнут лимит аккаунтов для этого Discord: {self.cog.discord_limit}.",
                                     ephemeral=True
                                 )
                                 return
@@ -201,7 +215,7 @@ class PterodactylStatus(commands.Cog):
                     payload = {
                         "username": username,
                         "email": email,
-                        "first_name": str(inter.author),
+                        "first_name": discord_id,
                         "last_name": "discord",
                         "password": password
                     }
