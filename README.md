@@ -7,7 +7,7 @@
 ──────────────────────────────────────────────
 git clone https://github.com/animesao/bot-pterodactyl.git
 cd bot-pterodactyl
-npm install && npm start
+python main.py
 
 🔔 После запуска выполните: /register
 
