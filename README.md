@@ -33,7 +33,6 @@ python main.py
 🛠 ИСПРАВЛЕНИЯ:
 ✓ 12 критических багов
 ✓ Оптимизация автодополнения команд
-✓ Снижение потребления памяти на 40%
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🇺🇸 English Version:
@@ -54,7 +53,6 @@ python main.py
 🛠 FIXES:
 ✓ 12 critical bugs fixed
 ✓ Command autocomplete improved
-✓ 40% memory usage reduction
 
 ═══════════════════════════════════════════════
 📆 2025 | Поддержка: @animesao
