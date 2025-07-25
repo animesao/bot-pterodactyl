@@ -63,4 +63,3 @@ Version 1.2.0 (Latest Update)
 ======
 2025 | Project maintained by animesao
 ======
-```
