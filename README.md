@@ -1,15 +1,4 @@
 ```markdown
-<div align="center">
-
-# 🦖 bot-pterodactyl 🌐
-**Управление серверами Pterodactyl через Discord | Pterodactyl Server Management via Discord**
-
-[![Version](https://img.shields.io/badge/Version-1.2.0-blue.svg)](https://github.com/animesao/bot-pterodactyl)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![Platform](https://img.shields.io/badge/Platform-Discord%20%7C%20Pterodactyl-orange)
-
-</div>
-
 ---
 
 ## 🌍 Языки | Languages
