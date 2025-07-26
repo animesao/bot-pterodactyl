@@ -112,7 +112,7 @@ Use `/register` for initial setup
 <div align="center">
 
 ## 📬 Поддержка | Support
-📧 Email: support@example.com | 💬 Telegram: [@animesao](https://t.me/animesao)
+📧 Email: igorerantaevigor66@gmail.com | Discord: animesao
 
 [![GitHub Stars](https://img.shields.io/github/stars/animesao/bot-pterodactyl?style=social)](https://github.com/animesao/bot-pterodactyl/stargazers)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Server-blue)](https://discord.gg/your-invite-link)
