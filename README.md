@@ -30,19 +30,7 @@
 
 ---
 
-<div id="english">
 
-## 🚀 Installation
-
-```bash
-git clone https://github.com/animesao/bot-pterodactyl.git
-cd bot-pterodactyl
-python main.py
-```
-**After launch:**  
-Use `/register` for initial setup
-
----
 
 ## 🆕 Version 1.2.0
 
