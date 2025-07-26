@@ -36,7 +36,7 @@ python main.py
 ### ✨ Новые функции
 - **Система авторизации** `/register`:
   ```bash
-  /register <API-ключ> [сервер_id]
+  /register
   ```
   - 🔗 Привязка к Pterodactyl
   - 🛡️ Авторизация через discord-ptero 1.0 (BETA)
@@ -82,7 +82,7 @@ Use `/register` for initial setup
 ### ✨ New Features
 - **Authorization system** `/register`:
   ```bash
-  /register <API-key> [server_id]
+  /register
   ```
   - 🔗 Pterodactyl integration
   - 🛡️ discord-ptero 1.0 (BETA) auth
