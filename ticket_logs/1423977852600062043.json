@@ -1,0 +1,20 @@
+[
+  {
+    "timestamp": "2025-10-04T10:19:36.418820",
+    "ticket_id": 1423977852600062043,
+    "ticket_name": "ticket-unsoftik",
+    "action": "Создан",
+    "user_id": 1210210290923208754,
+    "user_name": "unsoftik",
+    "reason": "хост лег как на это реагировать?"
+  },
+  {
+    "timestamp": "2025-10-04T10:42:50.762780",
+    "ticket_id": 1423977852600062043,
+    "ticket_name": "ticket-unsoftik",
+    "action": "Закрыт",
+    "user_id": 784701404308308028,
+    "user_name": "thediamond5",
+    "reason": "rubit"
+  }
+]

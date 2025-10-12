@@ -29,7 +29,7 @@ async def on_ready():
         status=disnake.Status.idle,  # Yellow status (неактивен)
         activity=disnake.Activity(
             type=disnake.ActivityType.watching,
-            name="hallcloud"
+            name="AmethystCloud"
         )
     )
     
@@ -53,6 +53,14 @@ async def on_ready():
         print("Pterodactyl cog loaded successfully")
     except Exception as e:
         print(f"Error loading pterodactyl cog: {e}")
+        
+    # Load the invites cog
+    try:
+        bot.load_extension("cogs.invites")
+        print("Invites cog loaded successfully")
+    except Exception as e:
+        print(f"Error loading invites cog: {e}")
+
 
 # Run the bot
 try:
