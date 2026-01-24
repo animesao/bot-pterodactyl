@@ -2,6 +2,7 @@ import disnake
 from disnake.ext import commands, tasks
 import aiohttp
 import os
+import json
 from dotenv import load_dotenv
 import datetime
 import traceback
@@ -11,19 +12,35 @@ load_dotenv()
 class PterodactylStatus(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.api_url = "http://DOMEN/api/application"
-        self.api_url_2 = "http://DOMEN/api/application"
+        self.api_url = "https://domen/api/application"
         self.api_key = "Application API"
-        self.api_key_2 = "Application API"
-        self.node_id = "ID"
-        self.node_id_2 = "ID"
+        self.node_ids = ["ID", "ID"]
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
         self.status_message_id = None
         self.discord_limit = int(os.getenv("PTERODACTYL_DISCORD_LIMIT", 1))
+        self.status_file = "cogs/pterodactyl_status.json"
+        self.load_status_data()
         self.update_status.start()
 
     def cog_unload(self):
         self.update_status.cancel()
+
+    def load_status_data(self):
+        try:
+            with open(self.status_file, 'r') as f:
+                data = json.load(f)
+                self.status_message_id = data.get('status_message_id')
+                self.status_channel_id = data.get('status_channel_id', self.status_channel_id)
+        except FileNotFoundError:
+            pass
+
+    def save_status_data(self):
+        data = {
+            'status_message_id': self.status_message_id,
+            'status_channel_id': self.status_channel_id
+        }
+        with open(self.status_file, 'w') as f:
+            json.dump(data, f)
 
     @tasks.loop(seconds=5)
     async def update_status(self):
@@ -32,80 +49,31 @@ class PterodactylStatus(commands.Cog):
                 # Проверяем доступность панели
                 panel_online = False
                 try:
-                    headers = {
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Accept": "application/json"
-                    }
-                    async with session.get(f"{self.api_url}/nodes", headers=headers, timeout=5) as resp:
+                    async with session.get(f"{self.api_url}/nodes", timeout=5) as resp:
                         panel_online = resp.status == 200
                 except:
                     panel_online = False
 
-                # Проверяем первую ноду
-                maintenance_mode = 1
-                node_online = False
-                try:
-                    headers = {
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Accept": "application/json"
-                    }
-                    async with session.get(f"{self.api_url}/nodes/{self.node_id}", headers=headers, timeout=5) as resp:
-                        if resp.status == 200:
-                            node = (await resp.json())["attributes"]
-                            maintenance_mode = node.get("maintenance_mode", 1)
-                            node_online = maintenance_mode == 0
-                except:
-                    pass
-
-                # Проверяем вторую ноду
-                maintenance_mode_2 = 1
-                node2_online = False
-                try:
-                    headers_2 = {
-                        "Authorization": f"Bearer {self.api_key_2}",
-                        "Accept": "application/json"
-                    }
-                    async with session.get(f"{self.api_url_2}/nodes/{self.node_id_2}", headers=headers_2, timeout=5) as resp:
-                        if resp.status == 200:
-                            node2 = (await resp.json())["attributes"]
-                            maintenance_mode_2 = node2.get("maintenance_mode", 1)
-                            node2_online = maintenance_mode_2 == 0
-                except Exception as e:
-                    print(f"Ошибка при проверке второй ноды: {str(e)}")
-                    pass
+                # Проверяем ноды
+                node_statuses = {}
+                for node_id in self.node_ids:
+                    node_online = False
+                    try:
+                        async with session.get(f"{self.api_url}/nodes/{node_id}", timeout=5) as resp:
+                            node_online = resp.status == 200
+                    except:
+                        node_online = False
+                    node_statuses[node_id] = node_online
 
                 # Формируем embed
+                panel_status = "🟢 Панель: Включена" if panel_online else "🔴 Панель: Выключена"
+                node_statuses_text = "\n".join([f"🟢 Нода-{node_id}: Включена" if online else f"🔴 Нода-{node_id}: Выключена" for node_id, online in node_statuses.items()])
                 embed = disnake.Embed(
-                    title="HallCloud - Мониторинг",
+                    title="AmethystCloud - Мониторинг",
+                    description=f"{panel_status}\n\n{node_statuses_text}",
                     color=disnake.Color.blue(),
                     timestamp=datetime.datetime.utcnow()
                 )
-
-                # Статус панели
-                panel_status = "🟢 Панель: Включена" if panel_online else "🔴 Панель: Выключена"
-                embed.add_field(name="Статус панели", value=panel_status, inline=False)
-
-                # Статус ноды 1
-                if not panel_online:
-                    node_status = "🔴 Нода-1: Выключена"
-                elif maintenance_mode == 1:
-                    node_status = "🟡 Нода-1: Техническое обслуживание"
-                elif node_online:
-                    node_status = "🟢 Нода-1: Включена"
-                else:
-                    node_status = "🔴 Нода-1: Выключена"
-                embed.add_field(name="Статус нод", value=node_status, inline=False)
-
-                # Статус ноды 2
-                if not panel_online:
-                    node2_status = "🔴 Нода-2: Выключена"
-                elif maintenance_mode_2 == 1:
-                    node2_status = "🟡 Нода-2: Техническое обслуживание"
-                elif node2_online:
-                    node2_status = "🟢 Нода-2: Включена"
-                else:
-                    node2_status = "🔴 Нода-2: Выключена"
-                embed.add_field(name="", value=node2_status, inline=False)
 
                 embed.set_footer(
                     text=f"Последнее обновление: {datetime.datetime.now().strftime('%H:%M:%S')}",
@@ -116,7 +84,7 @@ class PterodactylStatus(commands.Cog):
         except Exception as e:
             print(traceback.format_exc())
             embed = disnake.Embed(
-                title="HallCloud - Мониторинг",
+                title="AmethystCloud - Мониторинг",
                 color=disnake.Color.red(),
                 description="Панель: Выключена\nНода-1: Выключена\nНода-2: Выключена"
             )
@@ -139,6 +107,7 @@ class PterodactylStatus(commands.Cog):
                 pass
         msg = await channel.send(embed=embed)
         self.status_message_id = msg.id
+        self.save_status_data()
 
     class PterodactylRegisterModal(disnake.ui.Modal):
         def __init__(self, cog):
@@ -241,6 +210,7 @@ class PterodactylStatus(commands.Cog):
         msg = await inter.channel.send(embed=embed)
         self.status_message_id = msg.id
         self.status_channel_id = inter.channel.id
+        self.save_status_data()
         await inter.response.send_message("Панель мониторинга HallCloud успешно создана!", ephemeral=True)
 
     @commands.slash_command(name="register", description="Зарегистрироваться в панели Pterodactyl")
