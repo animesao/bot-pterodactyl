@@ -12,15 +12,20 @@ load_dotenv()
 class PterodactylStatus(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.api_url = "https://domen/api/application"
+        self.api_url = "https://panel.amethystcloud.online/api/application"
         self.api_key = "Application API"
-        self.node_ids = ["ID", "ID"]
+        self.node_ids = ["1", "2"]
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
         self.status_message_id = None
         self.discord_limit = int(os.getenv("PTERODACTYL_DISCORD_LIMIT", 1))
         self.status_file = "cogs/pterodactyl_status.json"
         self.load_status_data()
         self.update_status.start()
+        
+        # Проверка на корректность сохраненных данных
+        if self.status_message_id and not self.status_channel_id:
+            self.status_message_id = None
+            self.save_status_data()
 
     def cog_unload(self):
         self.update_status.cancel()
@@ -98,16 +103,28 @@ class PterodactylStatus(commands.Cog):
         channel = self.bot.get_channel(self.status_channel_id)
         if not channel:
             return
+        
+        # Попытка редактировать существующее сообщение
         if self.status_message_id:
             try:
                 msg = await channel.fetch_message(self.status_message_id)
                 await msg.edit(embed=embed)
                 return
-            except Exception:
-                pass
-        msg = await channel.send(embed=embed)
-        self.status_message_id = msg.id
-        self.save_status_data()
+            except disnake.errors.NotFound:
+                # Сообщение не найдено, сбрасываем ID
+                self.status_message_id = None
+                self.save_status_data()
+            except Exception as e:
+                print(f"Error editing status message: {e}")
+                return
+        
+        # Если сообщение не существует, создаем новое
+        try:
+            msg = await channel.send(embed=embed)
+            self.status_message_id = msg.id
+            self.save_status_data()
+        except Exception as e:
+            print(f"Error sending status message: {e}")
 
     class PterodactylRegisterModal(disnake.ui.Modal):
         def __init__(self, cog):
