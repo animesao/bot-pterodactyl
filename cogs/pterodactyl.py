@@ -12,7 +12,7 @@ load_dotenv()
 class PterodactylStatus(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.api_url = "https://panel.amethystcloud.online/api/application"
+        self.api_url = "https://DOMEN/api/application"
         self.api_key = "Application API"
         self.node_ids = ["ID", "ID"]
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
