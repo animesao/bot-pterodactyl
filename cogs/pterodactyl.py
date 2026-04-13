@@ -18,7 +18,12 @@ class PterodactylStatus(commands.Cog):
         self.bot = bot
         self.api_url = "https://panel.mysite.ru/api/application"
         self.api_key = os.getenv("PTERODACTYL_API_KEY", "")
-        self.node_ids = ["ID", "ID"]
+        
+        # Загрузка конфигурации нод из .env
+        # Формат: NODE_1=5:GER (Ryzen),NODE_2=9:GER2 (Epyc)
+        self.nodes = {}  # {id: name}
+        self.load_nodes_config()
+        
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
         self.status_message_id: Optional[int] = None
         self.discord_limit = int(os.getenv("PTERODACTYL_DISCORD_LIMIT", 1))
@@ -27,7 +32,7 @@ class PterodactylStatus(commands.Cog):
         
         self.last_panel_status: Optional[bool] = None
         self.last_node_statuses: dict = {}
-        self.node_uptime: Dict[str, Dict] = {}  # История аптайма для каждой ноды
+        self.node_uptime: Dict[str, Dict] = {}
         
         self.load_status_data()
         self.load_uptime_data()
@@ -35,6 +40,35 @@ class PterodactylStatus(commands.Cog):
         if self.status_message_id and not self.status_channel_id:
             self.status_message_id = None
             self.save_status_data()
+    
+    def load_nodes_config(self) -> None:
+        """Загрузка конфигурации нод из .env"""
+        # Пытаемся загрузить из переменных NODE_1, NODE_2, и т.д.
+        node_index = 1
+        while True:
+            node_config = os.getenv(f"PTERODACTYL_NODE_{node_index}")
+            if not node_config:
+                break
+            
+            # Формат: "5:GER (Ryzen)" или просто "5"
+            if ":" in node_config:
+                node_id, node_name = node_config.split(":", 1)
+                self.nodes[node_id.strip()] = node_name.strip()
+            else:
+                # Если имя не указано, используем ID
+                node_id = node_config.strip()
+                self.nodes[node_id] = f"#{node_id}"
+            
+            node_index += 1
+        
+        # Если ноды не настроены, используем старый формат
+        if not self.nodes:
+            old_node_ids = os.getenv("PTERODACTYL_NODE_IDS", "ID,ID").split(",")
+            for node_id in old_node_ids:
+                node_id = node_id.strip()
+                self.nodes[node_id] = f"#{node_id}"
+        
+        print(f"✅ Загружено {len(self.nodes)} нод: {', '.join([f'{k}={v}' for k, v in self.nodes.items()])}")
 
     async def cog_load(self):
         """Запуск задачи обновления при загрузке cog"""
@@ -71,7 +105,7 @@ class PterodactylStatus(commands.Cog):
                 self.node_uptime = json.load(f)
         except FileNotFoundError:
             # Инициализация данных для каждой ноды
-            self.node_uptime = {node_id: {"checks": 0, "online": 0} for node_id in self.node_ids}
+            self.node_uptime = {node_id: {"checks": 0, "online": 0} for node_id in self.nodes.keys()}
             self.save_uptime_data()
     
     def save_uptime_data(self) -> None:
@@ -124,15 +158,15 @@ class PterodactylStatus(commands.Cog):
 
                 # Проверка нод
                 node_statuses = {}
-                for node_id in self.node_ids:
+                for node_id in self.nodes.keys():
                     node_online = False
                     try:
                         async with session.get(f"{self.api_url}/nodes/{node_id}", headers=headers, timeout=5) as resp:
                             node_online = resp.status == 200
                             if not node_online:
-                                print(f"⚠️ Нода {node_id} недоступна. Статус: {resp.status}")
+                                print(f"⚠️ Нода {node_id} ({self.nodes[node_id]}) недоступна. Статус: {resp.status}")
                     except Exception as e:
-                        print(f"⚠️ Ошибка проверки ноды {node_id}: {e}")
+                        print(f"⚠️ Ошибка проверки ноды {node_id} ({self.nodes[node_id]}): {e}")
                         node_online = False
                     
                     node_statuses[node_id] = node_online
@@ -153,7 +187,8 @@ class PterodactylStatus(commands.Cog):
                     status_bar = "▰▰▰▰▰▰▰▰▰▰" if online else "▱▱▱▱▱▱▱▱▱▱"
                     status = "UPTIME" if online else "Отключена"
                     uptime = self.get_uptime_percentage(node_id)
-                    node_lines.append(f"{emoji} `Нода #{node_id}` {status_bar} **{status}** • `{uptime:.1f}%`")
+                    node_name = self.nodes.get(node_id, f"#{node_id}")
+                    node_lines.append(f"{emoji} `{node_name}` {status_bar} **{status}** • `{uptime:.1f}%`")
                 
                 embed = disnake.Embed(
                     title="💎 AmethystCloud • Панель Мониторинга",
@@ -391,7 +426,7 @@ class PterodactylStatus(commands.Cog):
         """Сброс статистики аптайма"""
         try:
             # Сбрасываем данные аптайма
-            self.node_uptime = {node_id: {"checks": 0, "online": 0} for node_id in self.node_ids}
+            self.node_uptime = {node_id: {"checks": 0, "online": 0} for node_id in self.nodes.keys()}
             self.save_uptime_data()
             
             embed = disnake.Embed(
@@ -416,7 +451,7 @@ class PterodactylStatus(commands.Cog):
                 timestamp=datetime.datetime.utcnow()
             )
             
-            for node_id in self.node_ids:
+            for node_id, node_name in self.nodes.items():
                 uptime_percentage = self.get_uptime_percentage(node_id)
                 uptime_data = self.node_uptime.get(node_id, {"checks": 0, "online": 0})
                 
@@ -435,7 +470,7 @@ class PterodactylStatus(commands.Cog):
                     status_text = "Плохой"
                 
                 embed.add_field(
-                    name=f"{status_emoji} Нода #{node_id}",
+                    name=f"{status_emoji} {node_name}",
                     value=(
                         f"**Аптайм:** `{uptime_percentage:.2f}%`\n"
                         f"**Статус:** {status_text}\n"
