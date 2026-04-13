@@ -198,7 +198,7 @@ class PterodactylStatus(commands.Cog):
                 
                 embed.add_field(
                     name="🌐 Панель Управления",
-                    value=f"{panel_emoji}\n**{panel_text}**\n━━━━━━━━━━━━━━━━━━━━",
+                    value=f"\n{panel_emoji} **{panel_text}**\n\n━━━━━━━━━━━━━━━━━━━━",
                     inline=False
                 )
                 
