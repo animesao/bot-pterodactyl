@@ -18,7 +18,7 @@ class PterodactylStatus(commands.Cog):
         self.bot = bot
         self.api_url = "https://panel.mysite.ru/api/application"
         self.api_key = os.getenv("PTERODACTYL_API_KEY", "")
-        self.node_ids = ["ID", "ID"] # И также дальше
+        self.node_ids = ["ID", "ID"]
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
         self.status_message_id: Optional[int] = None
         self.discord_limit = int(os.getenv("PTERODACTYL_DISCORD_LIMIT", 1))
