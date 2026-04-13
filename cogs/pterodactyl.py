@@ -175,14 +175,14 @@ class PterodactylStatus(commands.Cog):
                 # Общий статус
                 all_online = panel_online and all(node_statuses.values())
                 if all_online:
-                    overall_status = "✨ **Все системы функционируют оптимально**\n▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ **100%**"
+                    overall_status = "▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ **100%**"
                 elif panel_online:
                     percentage = int((online_count / total_count) * 100) if total_count > 0 else 0
                     bar_filled = int((online_count / total_count) * 20) if total_count > 0 else 0
                     bar = "▰" * bar_filled + "▱" * (20 - bar_filled)
-                    overall_status = f"⚠️ **Частичная работоспособность**\n{bar} **{percentage}%**"
+                    overall_status = f"{bar} **{percentage}%**"
                 else:
-                    overall_status = "🚨 **Критическая ошибка системы**\n▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ **0%**"
+                    overall_status = "▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ **0%**"
                 
                 embed.add_field(
                     name="📊 Общая Производительность",
