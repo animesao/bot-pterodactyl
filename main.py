@@ -5,15 +5,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Get the bot token from environment variables
+# Получение токена бота из переменных окружения
 token = os.getenv("token")
 
-# Check if token exists
 if not token:
-    print("Error: Bot token not found in .env file")
+    print("❌ Ошибка: Токен бота не найден в .env файле")
     exit(1)
 
-# Create bot instance with default intents
+# Создание экземпляра бота
 bot = commands.Bot(
     command_prefix="!",
     intents=disnake.Intents.all(),
@@ -22,54 +21,94 @@ bot = commands.Bot(
 
 @bot.event
 async def on_ready():
-    print(f"Bot is ready! Logged in as {bot.user}")
+    """Событие при успешном запуске бота"""
+    print(f"✅ Бот запущен! Вошли как {bot.user}")
     
-    # Set bot status to "неактивен" and activity to "hallcloud"
+    # Установка статуса бота
     await bot.change_presence(
-        status=disnake.Status.idle,  # Yellow status (неактивен)
+        status=disnake.Status.idle,
         activity=disnake.Activity(
             type=disnake.ActivityType.watching,
             name="AmethystCloud"
         )
     )
     
-    # Load the ticket cog
-    try:
-        bot.load_extension("cogs.tickets")
-        print("Ticket cog loaded successfully")
-    except Exception as e:
-        print(f"Error loading ticket cog: {e}")
+    # Загрузка расширений (cogs)
+    cogs = [
+        ("cogs.tickets", "Tickets"),
+        ("cogs.apply", "Apply"),
+        ("cogs.pterodactyl", "Pterodactyl"),
+        ("cogs.invites", "Invites")
+    ]
     
-    # Load the apply cog
-    try:
-        bot.load_extension("cogs.apply")
-        print("Apply cog loaded successfully")
-    except Exception as e:
-        print(f"Error loading apply cog: {e}")
-
-    # Load the pterodactyl cog
-    try:
-        bot.load_extension("cogs.pterodactyl")
-        print("Pterodactyl cog loaded successfully")
-    except Exception as e:
-        print(f"Error loading pterodactyl cog: {e}")
+    for cog_path, cog_name in cogs:
+        try:
+            bot.load_extension(cog_path)
+            print(f"✅ {cog_name} cog загружен успешно")
+        except Exception as e:
+            print(f"❌ Ошибка загрузки {cog_name} cog: {e}")
         
-    # Load the invites cog
+
+
+@bot.command(name="оплата")
+async def oplata(ctx):
+    """Показать реквизиты для оплаты"""
+    embed = disnake.Embed(
+        title="💳 AmethystCloud • Реквизиты для оплаты",
+        description="Выберите удобный для вас способ оплаты:",
+        color=disnake.Color.purple(),
+        timestamp=ctx.message.created_at
+    )
+    
+    embed.add_field(
+        name="🇷🇺 Карты РФ",
+        value=(
+            "**Т-Банк**\n"
+            "`000000000000000000000000`\n\n"
+            "**Сбербанк**\n"
+            "`000000000000000000000000`\n\n"
+            "**Озон Банк**\n"
+            "`000000000000000000000000`"
+        ),
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🇺🇦 Карта Украины",
+        value=(
+            "`000000000000000000000000`\n"
+            "*Присутствует небольшая комиссия*"
+        ),
+        inline=False
+    )
+    
+    embed.add_field(
+        name="💎 Другие способы оплаты",
+        value=(
+            "• Криптовалюта\n"
+            "• DonationAlerts\n"
+            "• FunPay\n\n"
+            "*Присутствует высокая комиссия*\n"
+            "*Уточняйте индивидуально*"
+        ),
+        inline=False
+    )
+    
+    embed.set_thumbnail(url=bot.user.avatar.url if bot.user.avatar else bot.user.default_avatar.url)
+    
+    embed.set_footer(
+        text=f"Спасибо за вашу поддержку! • Запросил {ctx.author}",
+        icon_url=ctx.author.display_avatar.url
+    )
+    
+    await ctx.send(embed=embed)
+
+
+# Запуск бота
+if __name__ == "__main__":
     try:
-        bot.load_extension("cogs.invites")
-        print("Invites cog loaded successfully")
+        bot.run(token)
+    except disnake.LoginFailure:
+        print("❌ Ошибка: Неверный токен бота")
     except Exception as e:
-        print(f"Error loading invites cog: {e}")
-
-
-# Run the bot
-try:
-    bot.run(token)
-except disnake.LoginFailure:
-    print("Error: Invalid bot token")
-except Exception as e:
-    print(f"Error running bot: {e}")
-
-
-
-
+        print(f"❌ Ошибка запуска бота: {e}")
