@@ -151,9 +151,10 @@ class PterodactylStatus(commands.Cog):
                     async with session.get(f"{self.api_url}/nodes", headers=headers, timeout=5) as resp:
                         panel_online = resp.status == 200
                         if not panel_online:
-                            print(f"⚠️ Панель недоступна. Статус: {resp.status}")
+                            response_text = await resp.text()
+                            print(f"⚠️ Панель недоступна. Статус: {resp.status}, Ответ: {response_text[:200]}")
                 except Exception as e:
-                    print(f"⚠️ Ошибка проверки панели: {e}")
+                    print(f"⚠️ Ошибка проверки панели: {type(e).__name__}: {e}")
                     panel_online = False
 
                 # Проверка нод
@@ -197,7 +198,7 @@ class PterodactylStatus(commands.Cog):
                 
                 embed.add_field(
                     name="🌐 Панель Управления",
-                    value=f"{panel_emoji} **{panel_text}**\n━━━━━━━━━━━━━━━━━━━━",
+                    value=f"{panel_emoji}\n**{panel_text}**\n━━━━━━━━━━━━━━━━━━━━",
                     inline=False
                 )
                 
