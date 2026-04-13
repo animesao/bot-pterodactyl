@@ -105,13 +105,19 @@ class InviteLogger(commands.Cog):
             account_age = self.format_time_ago(member.created_at)
             
             embed = disnake.Embed(
-                title="👋 Новый участник!",
-                color=disnake.Color.green(),
+                title="💎AmethystCloud • Новый участник",
+                description=f"Добро пожаловать, {member.mention}! Надеюсь, вы к нам надолго :)",
+                color=disnake.Color.purple(),
                 timestamp=datetime.datetime.utcnow()
             )
             
             embed.set_thumbnail(url=member.display_avatar.url)
-            embed.add_field(name="Участник", value=f"{member.mention}\n`{member}`", inline=False)
+            
+            embed.add_field(
+                name="👤 Участник",
+                value=f"{member.mention}\n`{member}`",
+                inline=False
+            )
             
             if used_invite and used_invite.inviter:
                 inviter = used_invite.inviter
@@ -131,13 +137,13 @@ class InviteLogger(commands.Cog):
                 )
                 embed.add_field(
                     name="📊 Всего приглашений",
-                    value=f"`{inviter_data['total_invites']}`",
+                    value=f"**{inviter_data['total_invites']}**",
                     inline=True
                 )
             else:
                 embed.add_field(
                     name="📨 Пригласил",
-                    value="Неизвестно",
+                    value="*Неизвестно*",
                     inline=False
                 )
             
@@ -148,21 +154,21 @@ class InviteLogger(commands.Cog):
             )
             embed.add_field(
                 name="📅 Аккаунт создан",
-                value=f"{account_age} назад",
+                value=f"**{account_age}** назад",
                 inline=True
             )
             embed.add_field(
                 name="👥 Участников на сервере",
-                value=f"`{guild.member_count}`",
+                value=f"**{guild.member_count}**",
                 inline=True
             )
             
-            embed.set_footer(text=f"ID: {member.id}")
-            
-            await logs_channel.send(
-                content=f"Добро пожаловать, {member.mention}! Надеюсь, вы к нам надолго :)",
-                embed=embed
+            embed.set_footer(
+                text=f"ID: {member.id}",
+                icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
             )
+            
+            await logs_channel.send(embed=embed)
             
         except Exception as e:
             print(f"❌ Ошибка в on_member_join: {e}")
@@ -202,39 +208,48 @@ class InviteLogger(commands.Cog):
                     break
             
             embed = disnake.Embed(
-                title="👋 Участник покинул сервер",
-                color=disnake.Color.red(),
+                title="💎 AmethystCloud • Участник покинул сервер",
+                description=f"Жаль, что покинул нас {member.mention}",
+                color=disnake.Color.purple(),
                 timestamp=datetime.datetime.utcnow()
             )
             
             embed.set_thumbnail(url=member.display_avatar.url)
-            embed.add_field(name="Участник", value=f"{member.mention}\n`{member}`", inline=False)
+            
+            embed.add_field(
+                name="👤 Участник",
+                value=f"{member.mention}\n`{member}`",
+                inline=False
+            )
             
             if inviter and inviter_data:
                 embed.add_field(
-                    name="📨 Пригласил",
+                    name="📨 Его пригласил",
                     value=f"{inviter.mention}\n`{inviter}`",
                     inline=True
                 )
                 embed.add_field(
                     name="📊 Осталось приглашений",
-                    value=f"`{inviter_data['total_invites']}`",
+                    value=f"**{inviter_data['total_invites']}**",
                     inline=True
                 )
             else:
                 embed.add_field(
-                    name="📨 Пригласил",
-                    value="Неизвестно",
+                    name="📨 Его пригласил",
+                    value="*Неизвестно*",
                     inline=False
                 )
             
             embed.add_field(
                 name="👥 Участников на сервере",
-                value=f"`{guild.member_count}`",
+                value=f"**{guild.member_count}**",
                 inline=True
             )
             
-            embed.set_footer(text=f"ID: {member.id}")
+            embed.set_footer(
+                text=f"ID: {member.id}",
+                icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
+            )
             
             await logs_channel.send(embed=embed)
             
@@ -273,8 +288,8 @@ class InviteLogger(commands.Cog):
             user_data = self.load_invite_data(target_user.id)
             
             embed = disnake.Embed(
-                title="📊 Статистика приглашений",
-                color=disnake.Color.blue(),
+                title="💎 AmethystCloud • Статистика приглашений",
+                color=disnake.Color.purple(),
                 timestamp=datetime.datetime.utcnow()
             )
             
@@ -318,7 +333,10 @@ class InviteLogger(commands.Cog):
                     inline=False
                 )
             
-            embed.set_footer(text=f"ID: {target_user.id}")
+            embed.set_footer(
+                text=f"ID: {target_user.id}",
+                icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
+            )
             
             await inter.response.send_message(embed=embed)
             
@@ -350,8 +368,8 @@ class InviteLogger(commands.Cog):
             leaderboard.sort(key=lambda x: x[1], reverse=True)
             
             embed = disnake.Embed(
-                title="🏆 Топ приглашений",
-                color=disnake.Color.gold(),
+                title="💎 AmethystCloud • Топ приглашений",
+                color=disnake.Color.purple(),
                 timestamp=datetime.datetime.utcnow()
             )
             
@@ -370,9 +388,16 @@ class InviteLogger(commands.Cog):
                     description += f"{medal} {member.mention} — **{count}** приглашений\n"
                 
                 embed.description = description
-                embed.set_footer(text=f"Всего участников в топе: {len(leaderboard)}")
+                embed.set_footer(
+                    text=f"Всего участников в топе: {len(leaderboard)}",
+                    icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
+                )
             else:
                 embed.description = "*Пока нет данных о приглашениях*"
+                embed.set_footer(
+                    text="AmethystCloud Invites",
+                    icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
+                )
             
             await inter.response.send_message(embed=embed)
             
@@ -395,14 +420,17 @@ class InviteLogger(commands.Cog):
             self.save_invite_data(user.id, user_data)
             
             embed = disnake.Embed(
-                title="✅ Приглашения сброшены",
+                title="💎 AmethystCloud • Приглашения сброшены",
                 description=f"Статистика приглашений пользователя {user.mention} была успешно сброшена",
-                color=disnake.Color.green(),
+                color=disnake.Color.purple(),
                 timestamp=datetime.datetime.utcnow()
             )
             
             embed.set_thumbnail(url=user.display_avatar.url)
-            embed.set_footer(text=f"Сброшено администратором {inter.author}")
+            embed.set_footer(
+                text=f"Сброшено администратором {inter.author}",
+                icon_url=inter.author.display_avatar.url
+            )
             
             await inter.response.send_message(embed=embed)
             
