@@ -16,9 +16,9 @@ class PterodactylStatus(commands.Cog):
     
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.api_url = "https://panel.mysite.ru/api/application"
+        self.api_url = "https://panel.amethystcloud.online/api/application"
         self.api_key = os.getenv("PTERODACTYL_API_KEY", "")
-        self.node_ids = ["ID", "ID"]
+        self.node_ids = ["5", "9"]
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
         self.status_message_id: Optional[int] = None
         self.discord_limit = int(os.getenv("PTERODACTYL_DISCORD_LIMIT", 1))
@@ -111,9 +111,9 @@ class PterodactylStatus(commands.Cog):
                 
                 for node_id, online in node_statuses.items():
                     emoji = "💎" if online else "🔴"
-                    status_bar = "████████░░" if online else "░░░░░░░░░░"
+                    status_bar = "▰▰▰▰▰▰▰▰▰▰" if online else "▱▱▱▱▱▱▱▱▱▱"
                     status = "Активна" if online else "Отключена"
-                    node_lines.append(f"{emoji} `Нода #{node_id}` {status_bar} {status}")
+                    node_lines.append(f"{emoji} `Нода #{node_id}` {status_bar} **{status}**")
                 
                 embed = disnake.Embed(
                     title="💎 AmethystCloud • Панель Мониторинга",
@@ -122,7 +122,7 @@ class PterodactylStatus(commands.Cog):
                 
                 embed.add_field(
                     name="🌐 Панель Управления",
-                    value=f"{panel_emoji} {panel_text}",
+                    value=f"{panel_emoji} **{panel_text}**",
                     inline=False
                 )
                 
@@ -135,14 +135,14 @@ class PterodactylStatus(commands.Cog):
                 # Общий статус
                 all_online = panel_online and all(node_statuses.values())
                 if all_online:
-                    overall_status = "✨ Все системы функционируют оптимально\n`████████████████████` 100%"
+                    overall_status = "✨ **Все системы функционируют оптимально**\n▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ **100%**"
                 elif panel_online:
                     percentage = int((online_count / total_count) * 100) if total_count > 0 else 0
                     bar_filled = int((online_count / total_count) * 20) if total_count > 0 else 0
-                    bar = "█" * bar_filled + "░" * (20 - bar_filled)
-                    overall_status = f"⚠️ Частичная работоспособность\n`{bar}` {percentage}%"
+                    bar = "▰" * bar_filled + "▱" * (20 - bar_filled)
+                    overall_status = f"⚠️ **Частичная работоспособность**\n{bar} **{percentage}%**"
                 else:
-                    overall_status = "🚨 Критическая ошибка системы\n`░░░░░░░░░░░░░░░░░░░░` 0%"
+                    overall_status = "🚨 **Критическая ошибка системы**\n▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ **0%**"
                 
                 embed.add_field(
                     name="📊 Общая Производительность",
