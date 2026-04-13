@@ -12,7 +12,7 @@ load_dotenv()
 class PterodactylStatus(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.api_url = "https://DOMEN/api/application"
+        self.api_url = "https://mysite/api/application"
         self.api_key = "Application API"
         self.node_ids = ["ID", "ID"]
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
@@ -20,6 +20,11 @@ class PterodactylStatus(commands.Cog):
         self.discord_limit = int(os.getenv("PTERODACTYL_DISCORD_LIMIT", 1))
         self.status_file = "cogs/pterodactyl_status.json"
         self.load_status_data()
+        
+        # Кэш предыдущих статусов для избежания лишних обновлений
+        self.last_panel_status = None
+        self.last_node_statuses = {}
+        
         self.update_status.start()
         
         # Проверка на корректность сохраненных данных
@@ -47,7 +52,7 @@ class PterodactylStatus(commands.Cog):
         with open(self.status_file, 'w') as f:
             json.dump(data, f)
 
-    @tasks.loop(seconds=5)
+    @tasks.loop(seconds=30)
     async def update_status(self):
         try:
             async with aiohttp.ClientSession() as session:
@@ -70,33 +75,129 @@ class PterodactylStatus(commands.Cog):
                         node_online = False
                     node_statuses[node_id] = node_online
 
-                # Формируем embed
-                panel_status = "🟢 Панель: Включена" if panel_online else "🔴 Панель: Выключена"
-                node_statuses_text = "\n".join([f"🟢 Нода-{node_id}: Включена" if online else f"🔴 Нода-{node_id}: Выключена" for node_id, online in node_statuses.items()])
+                # Проверяем, изменился ли статус нод
+                nodes_changed = self.last_node_statuses != node_statuses
+                
+                # Сохраняем текущий статус
+                self.last_panel_status = panel_online
+                self.last_node_statuses = node_statuses.copy()
+
+                # Формируем embed в фиолетовой стиле AmethystCloud
+                all_online = panel_online and all(node_statuses.values())
+                
+                # Фиолетовая цветовая схема AmethystCloud
+                embed_color = 0x9B59B6  # Фиолетовый цвет
+                
+                # Статус панели (без изменений в тексте)
+                panel_emoji = "💎" if panel_online else "🔴"
+                panel_text = "Работает стабильно" if panel_online else "Недоступна"
+                
+                # Статусы нод с прогресс-барами
+                node_lines = []
+                online_count = sum(1 for online in node_statuses.values() if online)
+                total_count = len(node_statuses)
+                
+                for node_id, online in node_statuses.items():
+                    emoji = "💎" if online else "🔴"
+                    status_bar = "████████░░" if online else "░░░░░░░░░░"
+                    status = "Активна" if online else "Отключена"
+                    node_lines.append(f"{emoji} `Нода #{node_id}` {status_bar} {status}")
+                
+                # Если ноды не изменились, обновляем только время
+                if not nodes_changed and self.status_message_id:
+                    channel = self.bot.get_channel(self.status_channel_id)
+                    if channel:
+                        try:
+                            msg = await channel.fetch_message(self.status_message_id)
+                            embed = msg.embeds[0] if msg.embeds else None
+                            if embed:
+                                current_time = datetime.datetime.now().strftime('%d.%m.%Y • %H:%M:%S')
+                                embed.set_footer(
+                                    text=f"🕐 Обновлено: {current_time}",
+                                    icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
+                                )
+                                await msg.edit(embed=embed)
+                                return
+                        except:
+                            pass
+                
+                # Создаем полный embed только если статус нод изменился
                 embed = disnake.Embed(
-                    title="AmethystCloud - Мониторинг",
-                    description=f"{panel_status}\n\n{node_statuses_text}",
-                    color=disnake.Color.blue(),
-                    timestamp=datetime.datetime.utcnow()
+                    title="💎 AmethystCloud • Панель Мониторинга",
+                    color=embed_color
+                )
+                
+                embed.add_field(
+                    name="🌐 Панель Управления",
+                    value=f"{panel_emoji} {panel_text}",
+                    inline=False
+                )
+                
+                embed.add_field(
+                    name=f"⚡ Статус Нод ({online_count}/{total_count})",
+                    value="\n".join(node_lines),
+                    inline=False
+                )
+                
+                # Общий статус с прогресс-индикатором
+                if all_online:
+                    overall_status = "✨ Все системы функционируют оптимально\n`████████████████████` 100%"
+                elif panel_online:
+                    percentage = int((online_count / total_count) * 100)
+                    bar_filled = int((online_count / total_count) * 20)
+                    bar = "█" * bar_filled + "░" * (20 - bar_filled)
+                    overall_status = f"⚠️ Частичная работоспособность\n`{bar}` {percentage}%"
+                else:
+                    overall_status = "🚨 Критическая ошибка системы\n`░░░░░░░░░░░░░░░░░░░░` 0%"
+                
+                embed.add_field(
+                    name="📊 Общая Производительность",
+                    value=overall_status,
+                    inline=False
                 )
 
+                current_time = datetime.datetime.now().strftime('%d.%m.%Y • %H:%M:%S')
                 embed.set_footer(
-                    text=f"Последнее обновление: {datetime.datetime.now().strftime('%H:%M:%S')}",
+                    text=f"🕐 Обновлено: {current_time}",
                     icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
                 )
+                
+                embed.set_thumbnail(url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url)
                 await self._send_or_edit(embed)
 
         except Exception as e:
             print(traceback.format_exc())
             embed = disnake.Embed(
-                title="AmethystCloud - Мониторинг",
-                color=disnake.Color.red(),
-                description="Панель: Выключена\nНода-1: Выключена\nНода-2: Выключена"
+                title="💎 AmethystCloud • Панель Мониторинга",
+                color=0x9B59B6
             )
+            
+            embed.add_field(
+                name="🌐 Панель Управления",
+                value="🔴 Недоступна",
+                inline=False
+            )
+            
+            node_error_lines = [f"🔴 `Нода #{node_id}` ░░░░░░░░░░ Отключена" for node_id in self.node_ids]
+            embed.add_field(
+                name=f"⚡ Статус Нод (0/{len(self.node_ids)})",
+                value="\n".join(node_error_lines),
+                inline=False
+            )
+            
+            embed.add_field(
+                name="📊 Общая Производительность",
+                value="🚨 Критическая ошибка подключения\n`░░░░░░░░░░░░░░░░░░░░` 0%",
+                inline=False
+            )
+            
+            current_time = datetime.datetime.now().strftime('%d.%m.%Y • %H:%M:%S')
             embed.set_footer(
-                text=f"Последнее обновление: {datetime.datetime.now().strftime('%H:%M:%S')}",
+                text=f"🕐 Обновлено: {current_time}",
                 icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
             )
+            
+            embed.set_thumbnail(url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url)
             await self._send_or_edit(embed)
 
     async def _send_or_edit(self, embed):
@@ -223,12 +324,16 @@ class PterodactylStatus(commands.Cog):
     @commands.slash_command(name="setup_pterodactyl_status", description="Настроить панель мониторинга Pterodactyl")
     @commands.has_permissions(administrator=True)
     async def setup_pterodactyl_status(self, inter: disnake.ApplicationCommandInteraction):
-        embed = disnake.Embed(title="HallCloud - Мониторинг", description="Загрузка статуса...", color=disnake.Color.blue())
+        embed = disnake.Embed(
+            title="💎 AmethystCloud • Панель Мониторинга", 
+            description="⏳ Инициализация системы мониторинга...\n`████████░░░░░░░░░░░░` 40%", 
+            color=0x9B59B6
+        )
         msg = await inter.channel.send(embed=embed)
         self.status_message_id = msg.id
         self.status_channel_id = inter.channel.id
         self.save_status_data()
-        await inter.response.send_message("Панель мониторинга HallCloud успешно создана!", ephemeral=True)
+        await inter.response.send_message("✨ Панель мониторинга AmethystCloud успешно инициализирована!", ephemeral=True)
 
     @commands.slash_command(name="register", description="Зарегистрироваться в панели Pterodactyl")
     async def register(self, inter: disnake.ApplicationCommandInteraction):
