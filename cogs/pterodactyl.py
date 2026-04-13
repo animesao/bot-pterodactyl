@@ -16,9 +16,9 @@ class PterodactylStatus(commands.Cog):
     
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.api_url = "https://panel.amethystcloud.online/api/application"
+        self.api_url = "https://panel.mysite.ru/api/application"
         self.api_key = os.getenv("PTERODACTYL_API_KEY", "")
-        self.node_ids = ["5", "9"]
+        self.node_ids = ["ID", "ID"]
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
         self.status_message_id: Optional[int] = None
         self.discord_limit = int(os.getenv("PTERODACTYL_DISCORD_LIMIT", 1))
