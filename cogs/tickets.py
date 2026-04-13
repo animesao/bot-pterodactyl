@@ -5,38 +5,36 @@ import os
 import json
 import datetime
 import traceback
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class TicketLogger:
-    def __init__(self, bot):
+    """Система логирования тикетов"""
+    
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.logs_channel_id = int(os.getenv("TICKET_LOGS_CHANNEL_ID", 0))
 
-    async def save_transcript(self, channel: disnake.TextChannel):
-        """Save the ticket transcript to a file"""
+    async def save_transcript(self, channel: disnake.TextChannel) -> Optional[str]:
+        """Сохранение транскрипта тикета в файл"""
         try:
-            # Create transcript
             messages = []
             async for message in channel.history(limit=None, oldest_first=True):
-                # Skip bot messages
                 if message.author.bot:
                     continue
                     
-                # Format message content
                 content = message.content
                 if message.attachments:
                     content += "\n" + "\n".join([f"📎 {att.url}" for att in message.attachments])
                 
-                # Add message to transcript
                 messages.append(f"[{message.created_at.strftime('%Y-%m-%d %H:%M:%S')}] {message.author.name}: {content}")
 
-            # Save transcript to file
             transcript = "\n".join(messages)
             filename = f"ticket_logs/transcript_{channel.name}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
             
-            # Ensure directory exists
             os.makedirs("ticket_logs", exist_ok=True)
             
             with open(filename, "w", encoding="utf-8") as f:
@@ -44,23 +42,28 @@ class TicketLogger:
                 
             return filename
         except Exception as e:
-            print(f"Error saving transcript: {str(e)}")
+            print(f"❌ Ошибка сохранения транскрипта: {str(e)}")
             print(traceback.format_exc())
             return None
 
-    async def log_ticket(self, ticket_channel: disnake.TextChannel, action: str, user: disnake.Member, reason: str = None):
-        """Log ticket actions to a Discord channel"""
+    async def log_ticket(
+        self, 
+        ticket_channel: disnake.TextChannel, 
+        action: str, 
+        user: disnake.Member, 
+        reason: Optional[str] = None
+    ) -> None:
+        """Логирование действий с тикетом"""
         try:
             if not self.logs_channel_id:
-                print("TICKET_LOGS_CHANNEL_ID not set")
+                print("⚠️ TICKET_LOGS_CHANNEL_ID не установлен")
                 return
 
             logs_channel = ticket_channel.guild.get_channel(self.logs_channel_id)
             if not logs_channel:
-                print(f"Logs channel {self.logs_channel_id} not found")
+                print(f"⚠️ Канал логов {self.logs_channel_id} не найден")
                 return
 
-            # Create log entry
             log_entry = {
                 "timestamp": datetime.datetime.utcnow().isoformat(),
                 "ticket_id": ticket_channel.id,
@@ -71,68 +74,66 @@ class TicketLogger:
                 "reason": reason
             }
 
-            # Create embed for immediate display
             embed = disnake.Embed(
-                title="🎫 Лог тикета",
-                color=0x0047df,
+                title="💎 AmethystCloud • Лог Тикета",
+                color=disnake.Color.purple(),
                 timestamp=datetime.datetime.utcnow()
             )
-            embed.add_field(name="Тикет", value=f"<#{ticket_channel.id}>", inline=False)
-            embed.add_field(name="Действие", value=action, inline=False)
-            embed.add_field(name="Пользователь", value=f"{user.mention} ({user.name})", inline=False)
+            
+            embed.add_field(name="📌 Тикет", value=f"<#{ticket_channel.id}>", inline=False)
+            embed.add_field(name="⚡ Действие", value=f"`{action}`", inline=True)
+            embed.add_field(name="👤 Пользователь", value=f"{user.mention}\n`{user}`", inline=True)
+            
             if reason:
-                embed.add_field(name="Причина", value=reason, inline=False)
+                embed.add_field(name="📝 Причина", value=f"```\n{reason}\n```", inline=False)
+            
+            embed.set_footer(text=f"ID: {ticket_channel.id}")
 
-            # Send embed to logs channel
             await logs_channel.send(embed=embed)
 
-            # Save log to file
             log_file = f"ticket_logs/{ticket_channel.id}.json"
             os.makedirs("ticket_logs", exist_ok=True)
 
-            # Read existing logs if file exists
             existing_logs = []
             if os.path.exists(log_file):
                 with open(log_file, 'r', encoding='utf-8') as f:
                     try:
                         existing_logs = json.load(f)
                     except json.JSONDecodeError:
-                        print(f"Error reading log file {log_file}")
+                        print(f"❌ Ошибка чтения файла логов {log_file}")
                         existing_logs = []
 
-            # Add new log entry
             existing_logs.append(log_entry)
 
-            # Write updated logs to file
             with open(log_file, 'w', encoding='utf-8') as f:
                 json.dump(existing_logs, f, ensure_ascii=False, indent=2)
 
-            # Save transcript if ticket is being closed
             if action == "Закрыт":
                 transcript_file = await self.save_transcript(ticket_channel)
                 if transcript_file:
                     await logs_channel.send(
-                        "📝 Информация о тикете:",
+                        "📝 Транскрипт тикета:",
                         file=disnake.File(transcript_file)
                     )
 
-            # Send log file to channel
             await logs_channel.send(
                 file=disnake.File(log_file, filename=f"ticket_{ticket_channel.id}_logs.json")
             )
 
         except Exception as e:
-            print(f"Error logging ticket: {str(e)}")
+            print(f"❌ Ошибка логирования тикета: {str(e)}")
             print(traceback.format_exc())
 
 class CloseTicketModal(disnake.ui.Modal):
-    def __init__(self, bot):
+    """Модальное окно для закрытия тикета"""
+    
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.logger = TicketLogger(bot)
         components = [
             disnake.ui.TextInput(
                 label="Причина закрытия",
-                placeholder="Введите причину закрытия тикета...",
+                placeholder="Укажите причину закрытия тикета (например: Вопрос решен)",
                 custom_id="reason",
                 style=disnake.TextInputStyle.paragraph,
                 required=True,
@@ -140,7 +141,7 @@ class CloseTicketModal(disnake.ui.Modal):
             )
         ]
         super().__init__(
-            title="Закрытие тикета",
+            title="💎 Закрытие тикета",
             custom_id="close_ticket_modal",
             components=components
         )
@@ -149,6 +150,9 @@ class CloseTicketModal(disnake.ui.Modal):
         reason = inter.text_values["reason"]
         
         try:
+            # Defer the response immediately
+            await inter.response.defer()
+            
             # Log ticket closure
             await self.logger.log_ticket(
                 ticket_channel=inter.channel,
@@ -160,29 +164,43 @@ class CloseTicketModal(disnake.ui.Modal):
             # Create transcript
             transcript_file = await self.logger.save_transcript(inter.channel)
             
-            # Send confirmation
-            await inter.response.send_message(
-                f"Тикет закрыт по причине: {reason}",
-                ephemeral=True
+            # Send confirmation with embed
+            close_embed = disnake.Embed(
+                title="🔒 Тикет закрывается...",
+                description=f"**Причина закрытия:**\n```\n{reason}\n```\n\nТикет будет удален через несколько секунд.",
+                color=0x9B59B6
             )
+            close_embed.set_footer(text="Спасибо за обращение в AmethystCloud!")
+            
+            await inter.channel.send(embed=close_embed)
+            
+            # Wait a bit before deleting
+            await asyncio.sleep(3)
             
             # Delete the channel
             await inter.channel.delete()
         except Exception as e:
-            await inter.response.send_message(
-                f"Произошла ошибка при закрытии тикета: {str(e)}",
-                ephemeral=True
+            error_embed = disnake.Embed(
+                title="❌ Ошибка",
+                description=f"Произошла ошибка при закрытии тикета: {str(e)}",
+                color=0xFF0000
             )
+            try:
+                await inter.followup.send(embed=error_embed, ephemeral=True)
+            except:
+                print(f"Error closing ticket: {e}")
 
 class TicketModal(disnake.ui.Modal):
-    def __init__(self, bot, category_id):
+    """Модальное окно для создания тикета"""
+    
+    def __init__(self, bot: commands.Bot, category_id: int):
         self.bot = bot
         self.category_id = category_id
         self.logger = TicketLogger(bot)
         components = [
             disnake.ui.TextInput(
-                label="Опишите ваш вопрос или запрос",
-                placeholder="Введите подробное описание...",
+                label="Опишите ваш вопрос",
+                placeholder="Подробно опишите вашу проблему или запрос...",
                 custom_id="description",
                 style=disnake.TextInputStyle.paragraph,
                 required=True,
@@ -190,7 +208,7 @@ class TicketModal(disnake.ui.Modal):
             )
         ]
         super().__init__(
-            title="Создание тикета",
+            title="💎 Создание тикета",
             custom_id="create_ticket",
             components=components
         )
@@ -243,11 +261,15 @@ class TicketModal(disnake.ui.Modal):
 
             # Send the initial message in the ticket channel
             embed = disnake.Embed(
-                title="Тикет",
+                title="💎 AmethystCloud • Тикет Поддержки",
                 description=f"Тикет создан для {inter.author.mention}\n\n"
-                          f"**Описание:**\n{description}\n\n"
-                          f"Для закрытия тикета нажмите на кнопку ниже.",
-                color=disnake.Color.green()
+                          f"**📋 Описание:**\n```\n{description}\n```\n\n"
+                          f"✨ Наша команда скоро ответит на ваш запрос!",
+                color=0x9B59B6
+            )
+            embed.set_footer(
+                text="Для закрытия тикета используйте кнопку ниже",
+                icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
             )
 
             # Add buttons
@@ -259,8 +281,8 @@ class TicketModal(disnake.ui.Modal):
             )
             
             assign_button = disnake.ui.Button(
-                label="Назначить ответственного",
-                style=disnake.ButtonStyle.primary,
+                label="Назначить",
+                style=disnake.ButtonStyle.secondary,
                 custom_id="assign_staff",
                 emoji="👤"
             )
@@ -270,10 +292,14 @@ class TicketModal(disnake.ui.Modal):
             view.add_item(assign_button)
 
             await channel.send(embed=embed, view=view)
-            await inter.response.send_message(
-                f"Тикет создан! Перейдите в {channel.mention}",
-                ephemeral=True
+            
+            # Send success message
+            success_embed = disnake.Embed(
+                title="✅ Тикет создан!",
+                description=f"Перейдите в {channel.mention}",
+                color=0x9B59B6
             )
+            await inter.response.send_message(embed=success_embed, ephemeral=True)
         except Exception as e:
             await inter.response.send_message(
                 f"Произошла ошибка при создании тикета: {str(e)}",
@@ -287,15 +313,15 @@ class TicketSelect(disnake.ui.Select):
         options = [
             disnake.SelectOption(
                 label="Помощь",
-                description="Создать тикет для получения помощи",
+                description="Получить помощь от нашей команды",
                 value="help",
                 emoji="❓"
             ),
             disnake.SelectOption(
                 label="Покупка тарифа",
-                description="Создать тикет для покупки тарифа",
+                description="Приобрести тарифный план",
                 value="tariff",
-                emoji="💳"
+                emoji="💎"
             )
         ]
         super().__init__(
@@ -428,22 +454,30 @@ class StaffSelect(disnake.ui.Select):
 
             # Create embed
             embed = disnake.Embed(
-                title="Назначение ответственного",
-                description="Ответственный был назначен для этого тикета",
-                color=disnake.Color.blue()
+                title="💎 Назначение Ответственного",
+                description=f"✅ {inter.author.mention} назначен ответственным",
+                color=0x9B59B6
             )
             
             embed.add_field(
-                name="Ответственный",
-                value=f"{inter.author.mention} ({role.mention})",
-                inline=False
+                name="👤 Ответственный",
+                value=f"{inter.author.mention}",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="🏷️ Роль",
+                value=f"{role.mention}",
+                inline=True
             )
             
             # Send initial response
-            await inter.response.send_message(
-                f"Вы назначены ответственным за тикет как {role.mention}",
-                ephemeral=True
+            success_embed = disnake.Embed(
+                title="✅ Назначение успешно!",
+                description=f"Вы назначены ответственным за тикет как {role.mention}",
+                color=0x9B59B6
             )
+            await inter.response.send_message(embed=success_embed, ephemeral=True)
             
             # Try to send or edit the status message
             try:
@@ -477,47 +511,68 @@ class TicketView(disnake.ui.View):
         self.add_item(TicketSelect(bot))
 
 class Tickets(commands.Cog):
-    def __init__(self, bot):
+    """Система тикетов поддержки"""
+    
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.logger = TicketLogger(bot)
-        # Category IDs for different ticket types
         self.help_category_id = int(os.getenv("HELP_CATEGORY_ID", 0))
         self.tariff_category_id = int(os.getenv("TARIFF_CATEGORY_ID", 0))
         self.ticket_panel_channel_id = int(os.getenv("TICKET_PANEL_CHANNEL_ID", 0))
         
-        # Create ticket logs directory if it doesn't exist
         os.makedirs("ticket_logs", exist_ok=True)
-        
-        # Flag for persistent views
         self.persistent_views_added = False
 
     async def cog_load(self):
-        # Add persistent views when the cog is loaded
+        """Загрузка постоянных представлений при запуске"""
         if not self.persistent_views_added:
             self.bot.add_view(TicketView(self.bot))
             self.persistent_views_added = True
-            print("Ticket persistent views added successfully")
+            print("✅ Постоянные представления тикетов добавлены")
 
     @commands.slash_command(name="setup_tickets", description="Настроить панель тикетов")
     @commands.has_permissions(administrator=True)
     async def setup_tickets(self, inter: disnake.ApplicationCommandInteraction):
         try:
+            # Defer the response immediately to prevent timeout
+            await inter.response.defer()
+            
             embed = disnake.Embed(
-                title="🎫 Система тикетов",
-                description="Выберите категорию тикета из выпадающего списка:",
-                color=disnake.Color.blue()
+                title="💎 AmethystCloud • Система Поддержки",
+                description="Добро пожаловать в систему поддержки AmethystCloud!\n\n"
+                          "**Выберите категорию тикета:**\n"
+                          "❓ **Помощь** - Получить помощь от нашей команды\n"
+                          "💎 **Покупка тарифа** - Приобрести тарифный план\n\n"
+                          "Используйте меню ниже для создания тикета:",
+                color=0x9B59B6
             )
+            embed.set_footer(
+                text="AmethystCloud Support System",
+                icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
+            )
+            embed.set_thumbnail(url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url)
             
             # Create view with select menu
             view = TicketView(self.bot)
             
             await inter.channel.send(embed=embed, view=view)
-            await inter.response.send_message("Панель тикетов успешно создана!", ephemeral=True)
-        except Exception as e:
-            await inter.response.send_message(
-                f"Произошла ошибка при создании панели тикетов: {str(e)}",
-                ephemeral=True
+            
+            success_embed = disnake.Embed(
+                title="✅ Успешно!",
+                description="Панель тикетов успешно создана!",
+                color=0x9B59B6
             )
+            await inter.edit_original_response(embed=success_embed)
+        except Exception as e:
+            error_embed = disnake.Embed(
+                title="❌ Ошибка",
+                description=f"Произошла ошибка при создании панели тикетов: {str(e)}",
+                color=0xFF0000
+            )
+            try:
+                await inter.edit_original_response(embed=error_embed)
+            except:
+                await inter.response.send_message(embed=error_embed, ephemeral=True)
             print(traceback.format_exc())
 
     @commands.Cog.listener()
