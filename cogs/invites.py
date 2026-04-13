@@ -1,444 +1,468 @@
 import disnake
-from disnake.ext import commands
+from disnake.ext import commands, tasks
+import aiohttp
 import os
 import json
-import datetime
-from typing import Optional, Dict, List
 from dotenv import load_dotenv
+import datetime
+import traceback
+from typing import Optional, Dict
 
 load_dotenv()
 
 
-class InviteLogger(commands.Cog):
-    """Система отслеживания приглашений и статистики пользователей"""
+class PterodactylStatus(commands.Cog):
+    """Система мониторинга статуса Pterodactyl панели"""
     
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.invites: Dict[int, List[disnake.Invite]] = {}
-        self.invite_logs_channel_id = int(os.getenv("INVITE_LOGS_CHANNEL_ID", 0))
-        self.invite_data_dir = "invite_data"
+        self.api_url = "https://panel.mysite.ru/api/application"
+        self.api_key = os.getenv("PTERODACTYL_API_KEY", "")
+        self.node_ids = ["ID", "ID"]
+        self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
+        self.status_message_id: Optional[int] = None
+        self.discord_limit = int(os.getenv("PTERODACTYL_DISCORD_LIMIT", 1))
+        self.status_file = "cogs/pterodactyl_status.json"
+        self.uptime_file = "cogs/pterodactyl_uptime.json"
         
-        os.makedirs(self.invite_data_dir, exist_ok=True)
+        self.last_panel_status: Optional[bool] = None
+        self.last_node_statuses: dict = {}
+        self.node_uptime: Dict[str, Dict] = {}  # История аптайма для каждой ноды
+        
+        self.load_status_data()
+        self.load_uptime_data()
+        
+        if self.status_message_id and not self.status_channel_id:
+            self.status_message_id = None
+            self.save_status_data()
 
     async def cog_load(self):
-        """Загрузка данных о приглашениях при запуске"""
-        await self.bot.wait_until_ready()
-        for guild in self.bot.guilds:
-            try:
-                self.invites[guild.id] = await guild.invites()
-                print(f"✅ Загружено {len(self.invites[guild.id])} приглашений для сервера {guild.name}")
-            except Exception as e:
-                print(f"❌ Ошибка загрузки приглашений для {guild.name}: {e}")
-                self.invites[guild.id] = []
+        """Запуск задачи обновления при загрузке cog"""
+        self.update_status.start()
+        print("✅ Задача обновления статуса Pterodactyl запущена")
 
-    def load_invite_data(self, user_id: int) -> Dict:
-        """Загрузка данных о приглашениях пользователя"""
-        file_path = os.path.join(self.invite_data_dir, f"{user_id}.json")
+    def cog_unload(self):
+        """Остановка задачи при выгрузке cog"""
+        self.update_status.cancel()
+
+    def load_status_data(self) -> None:
+        """Загрузка данных о статусе из файла"""
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+            with open(self.status_file, 'r') as f:
+                data = json.load(f)
+                self.status_message_id = data.get('status_message_id')
+                self.status_channel_id = data.get('status_channel_id', self.status_channel_id)
         except FileNotFoundError:
-            return {"total_invites": 0, "invited_users": []}
+            pass
 
-    def save_invite_data(self, user_id: int, data: Dict) -> None:
-        """Сохранение данных о приглашениях пользователя"""
-        file_path = os.path.join(self.invite_data_dir, f"{user_id}.json")
+    def save_status_data(self) -> None:
+        """Сохранение данных о статусе в файл"""
+        data = {
+            'status_message_id': self.status_message_id,
+            'status_channel_id': self.status_channel_id
+        }
+        with open(self.status_file, 'w') as f:
+            json.dump(data, f)
+    
+    def load_uptime_data(self) -> None:
+        """Загрузка данных об аптайме из файла"""
         try:
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"❌ Ошибка сохранения данных для пользователя {user_id}: {e}")
-
-    def find_invite_by_code(self, guild_invites: List[disnake.Invite], code: str) -> Optional[disnake.Invite]:
-        """Поиск приглашения по коду"""
-        return next((invite for invite in guild_invites if invite.code == code), None)
-
-    def get_invite_difference(self, old_invites: List[disnake.Invite], 
-                             new_invites: List[disnake.Invite]) -> Optional[disnake.Invite]:
-        """Определение использованного приглашения"""
-        for new_invite in new_invites:
-            old_invite = self.find_invite_by_code(old_invites, new_invite.code)
-            if old_invite and new_invite.uses > old_invite.uses:
-                return new_invite
-        return None
-
-    def format_time_ago(self, timestamp: datetime.datetime) -> str:
-        """Форматирование времени в читаемый вид"""
-        now = datetime.datetime.utcnow()
-        if timestamp.tzinfo is None:
-            timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
+            with open(self.uptime_file, 'r') as f:
+                self.node_uptime = json.load(f)
+        except FileNotFoundError:
+            # Инициализация данных для каждой ноды
+            self.node_uptime = {node_id: {"checks": 0, "online": 0} for node_id in self.node_ids}
+            self.save_uptime_data()
+    
+    def save_uptime_data(self) -> None:
+        """Сохранение данных об аптайме в файл"""
+        with open(self.uptime_file, 'w') as f:
+            json.dump(self.node_uptime, f, indent=2)
+    
+    def update_uptime(self, node_id: str, is_online: bool) -> None:
+        """Обновление статистики аптайма для ноды"""
+        if node_id not in self.node_uptime:
+            self.node_uptime[node_id] = {"checks": 0, "online": 0}
         
-        diff = now.replace(tzinfo=datetime.timezone.utc) - timestamp
-        days = diff.days
+        self.node_uptime[node_id]["checks"] += 1
+        if is_online:
+            self.node_uptime[node_id]["online"] += 1
         
-        if days >= 365:
-            years = days // 365
-            return f"{years} {'год' if years == 1 else 'года' if years < 5 else 'лет'}"
-        elif days >= 30:
-            months = days // 30
-            return f"{months} {'месяц' if months == 1 else 'месяца' if months < 5 else 'месяцев'}"
-        elif days > 0:
-            return f"{days} {'день' if days == 1 else 'дня' if days < 5 else 'дней'}"
-        else:
-            hours = diff.seconds // 3600
-            if hours > 0:
-                return f"{hours} {'час' if hours == 1 else 'часа' if hours < 5 else 'часов'}"
-            else:
-                minutes = diff.seconds // 60
-                return f"{minutes} {'минуту' if minutes == 1 else 'минуты' if minutes < 5 else 'минут'}"
+        self.save_uptime_data()
+    
+    def get_uptime_percentage(self, node_id: str) -> float:
+        """Получение процента аптайма для ноды"""
+        if node_id not in self.node_uptime or self.node_uptime[node_id]["checks"] == 0:
+            return 0.0
+        
+        uptime_data = self.node_uptime[node_id]
+        return (uptime_data["online"] / uptime_data["checks"]) * 100
 
-    @commands.Cog.listener()
-    async def on_member_join(self, member: disnake.Member):
-        """Обработка входа нового участника"""
+    @tasks.loop(seconds=30)
+    async def update_status(self):
+        """Обновление статуса панели и нод"""
+        if not self.status_message_id or not self.status_channel_id:
+            return
+            
         try:
-            guild = member.guild
-            current_invites = await guild.invites()
-            old_invites = self.invites.get(guild.id, [])
-            used_invite = self.get_invite_difference(old_invites, current_invites)
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Accept": "application/json"
+            }
             
-            self.invites[guild.id] = current_invites
-            
-            logs_channel = guild.get_channel(self.invite_logs_channel_id)
-            if not logs_channel:
-                return
+            async with aiohttp.ClientSession() as session:
+                # Проверка панели
+                panel_online = False
+                try:
+                    async with session.get(f"{self.api_url}/nodes", headers=headers, timeout=5) as resp:
+                        panel_online = resp.status == 200
+                        if not panel_online:
+                            print(f"⚠️ Панель недоступна. Статус: {resp.status}")
+                except Exception as e:
+                    print(f"⚠️ Ошибка проверки панели: {e}")
+                    panel_online = False
 
-            account_age = self.format_time_ago(member.created_at)
-            
-            embed = disnake.Embed(
-                title="💎AmethystCloud • Новый участник",
-                description=f"Добро пожаловать, {member.mention}! Надеюсь, вы к нам надолго :)",
-                color=disnake.Color.purple(),
-                timestamp=datetime.datetime.utcnow()
-            )
-            
-            embed.set_thumbnail(url=member.display_avatar.url)
-            
-            embed.add_field(
-                name="👤 Участник",
-                value=f"{member.mention}\n`{member}`",
-                inline=False
-            )
-            
-            if used_invite and used_invite.inviter:
-                inviter = used_invite.inviter
-                inviter_data = self.load_invite_data(inviter.id)
-                inviter_data["total_invites"] += 1
-                inviter_data["invited_users"].append({
-                    "user_id": member.id,
-                    "username": str(member),
-                    "joined_at": datetime.datetime.utcnow().isoformat()
-                })
-                self.save_invite_data(inviter.id, inviter_data)
-                
-                embed.add_field(
-                    name="📨 Пригласил",
-                    value=f"{inviter.mention}\n`{inviter}`",
-                    inline=True
-                )
-                embed.add_field(
-                    name="📊 Всего приглашений",
-                    value=f"**{inviter_data['total_invites']}**",
-                    inline=True
-                )
-            else:
-                embed.add_field(
-                    name="📨 Пригласил",
-                    value="*Неизвестно*",
-                    inline=False
-                )
-            
-            embed.add_field(
-                name="🆔 ID пользователя",
-                value=f"`{member.id}`",
-                inline=True
-            )
-            embed.add_field(
-                name="📅 Аккаунт создан",
-                value=f"**{account_age}** назад",
-                inline=True
-            )
-            embed.add_field(
-                name="👥 Участников на сервере",
-                value=f"**{guild.member_count}**",
-                inline=True
-            )
-            
-            embed.set_footer(
-                text=f"ID: {member.id}",
-                icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
-            )
-            
-            await logs_channel.send(embed=embed)
-            
-        except Exception as e:
-            print(f"❌ Ошибка в on_member_join: {e}")
-
-    @commands.Cog.listener()
-    async def on_member_remove(self, member: disnake.Member):
-        """Обработка выхода участника"""
-        try:
-            guild = member.guild
-            logs_channel = guild.get_channel(self.invite_logs_channel_id)
-            if not logs_channel:
-                return
-
-            inviter = None
-            inviter_data = None
-            
-            for filename in os.listdir(self.invite_data_dir):
-                if not filename.endswith(".json"):
-                    continue
+                # Проверка нод
+                node_statuses = {}
+                for node_id in self.node_ids:
+                    node_online = False
+                    try:
+                        async with session.get(f"{self.api_url}/nodes/{node_id}", headers=headers, timeout=5) as resp:
+                            node_online = resp.status == 200
+                            if not node_online:
+                                print(f"⚠️ Нода {node_id} недоступна. Статус: {resp.status}")
+                    except Exception as e:
+                        print(f"⚠️ Ошибка проверки ноды {node_id}: {e}")
+                        node_online = False
                     
-                user_id = int(filename.replace(".json", ""))
-                user_data = self.load_invite_data(user_id)
+                    node_statuses[node_id] = node_online
+                    self.update_uptime(node_id, node_online)  # Обновляем статистику аптайма
+
+                # Формирование embed
+                embed_color = disnake.Color.purple()
                 
-                for invited_user in user_data.get("invited_users", []):
-                    if invited_user["user_id"] == member.id:
-                        inviter = guild.get_member(user_id)
-                        user_data["invited_users"] = [
-                            u for u in user_data["invited_users"] 
-                            if u["user_id"] != member.id
-                        ]
-                        user_data["total_invites"] = max(0, user_data["total_invites"] - 1)
-                        self.save_invite_data(user_id, user_data)
-                        inviter_data = user_data
-                        break
+                panel_emoji = "💎" if panel_online else "🔴"
+                panel_text = "Работает стабильно" if panel_online else "Недоступна"
                 
-                if inviter:
-                    break
-            
-            embed = disnake.Embed(
-                title="💎 AmethystCloud • Участник покинул сервер",
-                description=f"Жаль, что покинул нас {member.mention}",
-                color=disnake.Color.purple(),
-                timestamp=datetime.datetime.utcnow()
-            )
-            
-            embed.set_thumbnail(url=member.display_avatar.url)
-            
-            embed.add_field(
-                name="👤 Участник",
-                value=f"{member.mention}\n`{member}`",
-                inline=False
-            )
-            
-            if inviter and inviter_data:
-                embed.add_field(
-                    name="📨 Его пригласил",
-                    value=f"{inviter.mention}\n`{inviter}`",
-                    inline=True
+                node_lines = []
+                online_count = sum(1 for online in node_statuses.values() if online)
+                total_count = len(node_statuses)
+                
+                for node_id, online in node_statuses.items():
+                    emoji = "💎" if online else "🔴"
+                    status_bar = "▰▰▰▰▰▰▰▰▰▰" if online else "▱▱▱▱▱▱▱▱▱▱"
+                    status = "UPTIME" if online else "Отключена"
+                    uptime = self.get_uptime_percentage(node_id)
+                    node_lines.append(f"{emoji} `Нода #{node_id}` {status_bar} **{status}** • `{uptime:.1f}%`")
+                
+                embed = disnake.Embed(
+                    title="💎 AmethystCloud • Панель Мониторинга",
+                    color=embed_color
                 )
+                
                 embed.add_field(
-                    name="📊 Осталось приглашений",
-                    value=f"**{inviter_data['total_invites']}**",
-                    inline=True
-                )
-            else:
-                embed.add_field(
-                    name="📨 Его пригласил",
-                    value="*Неизвестно*",
+                    name="🌐 Панель Управления",
+                    value=f"{panel_emoji} **{panel_text}**",
                     inline=False
                 )
-            
-            embed.add_field(
-                name="👥 Участников на сервере",
-                value=f"**{guild.member_count}**",
-                inline=True
-            )
-            
-            embed.set_footer(
-                text=f"ID: {member.id}",
-                icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
-            )
-            
-            await logs_channel.send(embed=embed)
-            
-        except Exception as e:
-            print(f"❌ Ошибка в on_member_remove: {e}")
-
-    @commands.Cog.listener()
-    async def on_invite_create(self, invite: disnake.Invite):
-        """Обработка создания приглашения"""
-        try:
-            guild = invite.guild
-            if guild.id not in self.invites:
-                self.invites[guild.id] = []
-            self.invites[guild.id] = await guild.invites()
-        except Exception as e:
-            print(f"❌ Ошибка в on_invite_create: {e}")
-
-    @commands.Cog.listener()
-    async def on_invite_delete(self, invite: disnake.Invite):
-        """Обработка удаления приглашения"""
-        try:
-            guild = invite.guild
-            self.invites[guild.id] = await guild.invites()
-        except Exception as e:
-            print(f"❌ Ошибка в on_invite_delete: {e}")
-
-    @commands.slash_command(name="invites", description="Посмотреть количество приглашений пользователя")
-    async def invites_command(
-        self, 
-        inter: disnake.ApplicationCommandInteraction, 
-        user: disnake.Member = None
-    ):
-        """Показать статистику приглашений пользователя"""
-        try:
-            target_user = user or inter.author
-            user_data = self.load_invite_data(target_user.id)
-            
-            embed = disnake.Embed(
-                title="💎 AmethystCloud • Статистика приглашений",
-                color=disnake.Color.purple(),
-                timestamp=datetime.datetime.utcnow()
-            )
-            
-            embed.set_thumbnail(url=target_user.display_avatar.url)
-            
-            embed.add_field(
-                name="👤 Пользователь",
-                value=f"{target_user.mention}\n`{target_user}`",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="📨 Всего приглашений",
-                value=f"**{user_data.get('total_invites', 0)}**",
-                inline=True
-            )
-            
-            embed.add_field(
-                name="👥 Активных приглашений",
-                value=f"**{len(user_data.get('invited_users', []))}**",
-                inline=True
-            )
-            
-            recent_invites = user_data.get("invited_users", [])[-5:]
-            if recent_invites:
-                recent_list = []
-                for invited in recent_invites:
-                    member = inter.guild.get_member(invited["user_id"])
-                    name = member.mention if member else f"`{invited['username']}`"
-                    recent_list.append(f"• {name}")
                 
                 embed.add_field(
-                    name="🔹 Последние приглашения",
-                    value="\n".join(recent_list),
+                    name=f"⚡ Статус Нод ({online_count}/{total_count})",
+                    value="\n".join(node_lines),
                     inline=False
                 )
-            else:
+                
+                # Общий статус
+                all_online = panel_online and all(node_statuses.values())
+                if all_online:
+                    overall_status = "▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ **100%**"
+                elif panel_online:
+                    percentage = int((online_count / total_count) * 100) if total_count > 0 else 0
+                    bar_filled = int((online_count / total_count) * 20) if total_count > 0 else 0
+                    bar = "▰" * bar_filled + "▱" * (20 - bar_filled)
+                    overall_status = f"{bar} **{percentage}%**"
+                else:
+                    overall_status = "▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ **0%**"
+                
                 embed.add_field(
-                    name="🔹 Последние приглашения",
-                    value="*Нет данных*",
+                    name="📊 Общая Производительность",
+                    value=overall_status,
                     inline=False
                 )
-            
-            embed.set_footer(
-                text=f"ID: {target_user.id}",
-                icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
-            )
-            
-            await inter.response.send_message(embed=embed)
-            
-        except Exception as e:
-            await inter.response.send_message(
-                f"❌ Произошла ошибка: {str(e)}",
-                ephemeral=True
-            )
 
-    @commands.slash_command(name="leaderboard", description="Топ пользователей по приглашениям")
-    async def leaderboard_command(self, inter: disnake.ApplicationCommandInteraction):
-        """Показать таблицу лидеров по приглашениям"""
-        try:
-            leaderboard = []
-            
-            for filename in os.listdir(self.invite_data_dir):
-                if not filename.endswith(".json"):
-                    continue
-                    
-                user_id = int(filename.replace(".json", ""))
-                user_data = self.load_invite_data(user_id)
-                total_invites = user_data.get("total_invites", 0)
-                
-                if total_invites > 0:
-                    member = inter.guild.get_member(user_id)
-                    if member:
-                        leaderboard.append((member, total_invites))
-            
-            leaderboard.sort(key=lambda x: x[1], reverse=True)
-            
-            embed = disnake.Embed(
-                title="💎 AmethystCloud • Топ приглашений",
-                color=disnake.Color.purple(),
-                timestamp=datetime.datetime.utcnow()
-            )
-            
-            if leaderboard:
-                description = ""
-                for i, (member, count) in enumerate(leaderboard[:10], 1):
-                    if i == 1:
-                        medal = "🥇"
-                    elif i == 2:
-                        medal = "🥈"
-                    elif i == 3:
-                        medal = "🥉"
-                    else:
-                        medal = f"`{i}.`"
-                    
-                    description += f"{medal} {member.mention} — **{count}** приглашений\n"
-                
-                embed.description = description
+                current_time = datetime.datetime.now().strftime('%d.%m.%Y • %H:%M:%S')
                 embed.set_footer(
-                    text=f"Всего участников в топе: {len(leaderboard)}",
+                    text=f"🕐 Обновлено: {current_time}",
                     icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
                 )
-            else:
-                embed.description = "*Пока нет данных о приглашениях*"
-                embed.set_footer(
-                    text="AmethystCloud Invites",
-                    icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
-                )
-            
-            await inter.response.send_message(embed=embed)
-            
+                
+                embed.set_thumbnail(url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url)
+                
+                # Обновление сообщения
+                channel = self.bot.get_channel(self.status_channel_id)
+                if channel:
+                    try:
+                        msg = await channel.fetch_message(self.status_message_id)
+                        await msg.edit(embed=embed)
+                        print(f"✅ Статус обновлен: Панель={panel_online}, Ноды={online_count}/{total_count}")
+                    except disnake.errors.NotFound:
+                        print("⚠️ Сообщение статуса не найдено, сбрасываем ID")
+                        self.status_message_id = None
+                        self.save_status_data()
+                    except Exception as e:
+                        print(f"❌ Ошибка обновления сообщения: {e}")
+
         except Exception as e:
-            await inter.response.send_message(
-                f"❌ Произошла ошибка: {str(e)}",
-                ephemeral=True
+            print(f"❌ Критическая ошибка в update_status: {e}")
+            print(traceback.format_exc())
+
+    @update_status.before_loop
+    async def before_update_status(self):
+        """Ожидание готовности бота перед запуском задачи"""
+        await self.bot.wait_until_ready()
+        print("✅ Бот готов, задача мониторинга Pterodactyl начинает работу")
+
+    class PterodactylRegisterModal(disnake.ui.Modal):
+        """Модальное окно регистрации в Pterodactyl"""
+        
+        def __init__(self, cog: 'PterodactylStatus'):
+            self.cog = cog
+            components = [
+                disnake.ui.TextInput(
+                    label="Имя пользователя",
+                    placeholder="Введите желаемый username",
+                    custom_id="username",
+                    style=disnake.TextInputStyle.short,
+                    required=True,
+                    max_length=32
+                ),
+                disnake.ui.TextInput(
+                    label="Email",
+                    placeholder="Введите ваш email",
+                    custom_id="email",
+                    style=disnake.TextInputStyle.short,
+                    required=True,
+                    max_length=100
+                ),
+                disnake.ui.TextInput(
+                    label="Пароль",
+                    placeholder="Введите желаемый пароль (минимум 8 символов)",
+                    custom_id="password",
+                    style=disnake.TextInputStyle.short,
+                    required=True,
+                    min_length=8,
+                    max_length=64
+                )
+            ]
+            super().__init__(
+                title="Регистрация в панели Pterodactyl",
+                custom_id="pterodactyl_register",
+                components=components
             )
 
-    @commands.slash_command(name="reset_invites", description="Сбросить приглашения пользователя (только для администраторов)")
+        async def callback(self, inter: disnake.ModalInteraction):
+            """Обработка регистрации пользователя"""
+            username = inter.text_values["username"]
+            email = inter.text_values["email"]
+            password = inter.text_values["password"]
+            discord_id = str(inter.author.id)
+            
+            try:
+                async with aiohttp.ClientSession() as session:
+                    headers = {
+                        "Authorization": f"Bearer {self.cog.api_key}",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    }
+                    
+                    check_url_email = f"{self.cog.api_url}/users?filter[email]={email}"
+                    async with session.get(check_url_email, headers=headers) as check_resp_email:
+                        if check_resp_email.status == 200:
+                            data_email = await check_resp_email.json()
+                            if data_email.get("data"):
+                                await inter.response.send_message(
+                                    "❌ На этот email уже зарегистрирован пользователь в панели.",
+                                    ephemeral=True
+                                )
+                                return
+                    
+                    check_url_id = f"{self.cog.api_url}/users?filter[first_name]={discord_id}"
+                    async with session.get(check_url_id, headers=headers) as check_resp_id:
+                        if check_resp_id.status == 200:
+                            data_id = await check_resp_id.json()
+                            count = len(data_id.get("data", []))
+                            if count >= self.cog.discord_limit:
+                                await inter.response.send_message(
+                                    f"❌ Достигнут лимит аккаунтов для этого Discord: {self.cog.discord_limit}.",
+                                    ephemeral=True
+                                )
+                                return
+                    
+                    payload = {
+                        "username": username,
+                        "email": email,
+                        "first_name": discord_id,
+                        "last_name": "discord",
+                        "password": password
+                    }
+                    
+                    async with session.post(f"{self.cog.api_url}/users", headers=headers, json=payload) as resp:
+                        if resp.status == 201:
+                            success_embed = disnake.Embed(
+                                title="✅ Регистрация успешна!",
+                                description="Ваш аккаунт успешно создан в панели Pterodactyl",
+                                color=disnake.Color.green(),
+                                timestamp=datetime.datetime.utcnow()
+                            )
+                            success_embed.add_field(name="👤 Логин", value=f"`{username}`", inline=True)
+                            success_embed.add_field(name="📧 Email", value=f"`{email}`", inline=True)
+                            success_embed.add_field(name="🔑 Пароль", value=f"||`{password}`||", inline=False)
+                            success_embed.set_footer(text="AmethystCloud Pterodactyl")
+                            
+                            await inter.response.send_message(embed=success_embed, ephemeral=True)
+                        else:
+                            data = await resp.text()
+                            await inter.response.send_message(
+                                f"❌ Не удалось зарегистрировать аккаунт. Код: {resp.status}\n```\n{data}\n```",
+                                ephemeral=True
+                            )
+            except Exception as e:
+                await inter.response.send_message(
+                    f"❌ Ошибка при регистрации: {e}",
+                    ephemeral=True
+                )
+
+    @commands.slash_command(name="setup_pterodactyl_status", description="Настроить панель мониторинга Pterodactyl")
     @commands.has_permissions(administrator=True)
-    async def reset_invites_command(
-        self, 
-        inter: disnake.ApplicationCommandInteraction, 
-        user: disnake.Member
-    ):
-        """Сброс счетчика приглашений пользователя (только для администраторов)"""
+    async def setup_pterodactyl_status(self, inter: disnake.ApplicationCommandInteraction):
+        """Настройка панели мониторинга"""
+        embed = disnake.Embed(
+            title="💎 AmethystCloud • Панель Мониторинга", 
+            description="⏳ Инициализация системы мониторинга...\n`████████░░░░░░░░░░░░` 40%", 
+            color=disnake.Color.purple()
+        )
+        
+        msg = await inter.channel.send(embed=embed)
+        self.status_message_id = msg.id
+        self.status_channel_id = inter.channel.id
+        self.save_status_data()
+        
+        success_embed = disnake.Embed(
+            title="✅ Успешно!",
+            description="Панель мониторинга AmethystCloud успешно инициализирована!",
+            color=disnake.Color.green()
+        )
+        await inter.response.send_message(embed=success_embed, ephemeral=True)
+
+    @commands.slash_command(name="reset_pterodactyl_status", description="Сбросить панель мониторинга")
+    @commands.has_permissions(administrator=True)
+    async def reset_pterodactyl_status(self, inter: disnake.ApplicationCommandInteraction):
+        """Сброс панели мониторинга"""
         try:
-            user_data = {"total_invites": 0, "invited_users": []}
-            self.save_invite_data(user.id, user_data)
+            # Удаляем старое сообщение если есть
+            if self.status_message_id and self.status_channel_id:
+                try:
+                    channel = self.bot.get_channel(self.status_channel_id)
+                    if channel:
+                        msg = await channel.fetch_message(self.status_message_id)
+                        await msg.delete()
+                except:
+                    pass
+            
+            # Сбрасываем данные
+            self.status_message_id = None
+            self.save_status_data()
+            
+            success_embed = disnake.Embed(
+                title="✅ Сброшено!",
+                description="Панель мониторинга сброшена. Используйте `/setup_pterodactyl_status` для создания новой.",
+                color=disnake.Color.green()
+            )
+            await inter.response.send_message(embed=success_embed, ephemeral=True)
+        except Exception as e:
+            await inter.response.send_message(
+                f"❌ Ошибка: {str(e)}",
+                ephemeral=True
+            )
+
+    @commands.slash_command(name="reset_pterodactyl_uptime", description="Сбросить статистику аптайма нод")
+    @commands.has_permissions(administrator=True)
+    async def reset_pterodactyl_uptime(self, inter: disnake.ApplicationCommandInteraction):
+        """Сброс статистики аптайма"""
+        try:
+            # Сбрасываем данные аптайма
+            self.node_uptime = {node_id: {"checks": 0, "online": 0} for node_id in self.node_ids}
+            self.save_uptime_data()
             
             embed = disnake.Embed(
-                title="💎 AmethystCloud • Приглашения сброшены",
-                description=f"Статистика приглашений пользователя {user.mention} была успешно сброшена",
+                title="✅ Статистика сброшена!",
+                description="Статистика аптайма всех нод была сброшена.",
+                color=disnake.Color.green()
+            )
+            await inter.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            await inter.response.send_message(
+                f"❌ Ошибка: {str(e)}",
+                ephemeral=True
+            )
+
+    @commands.slash_command(name="pterodactyl_uptime", description="Показать детальную статистику аптайма")
+    async def pterodactyl_uptime(self, inter: disnake.ApplicationCommandInteraction):
+        """Показать детальную статистику аптайма нод"""
+        try:
+            embed = disnake.Embed(
+                title="💎 AmethystCloud • Статистика Аптайма",
                 color=disnake.Color.purple(),
                 timestamp=datetime.datetime.utcnow()
             )
             
-            embed.set_thumbnail(url=user.display_avatar.url)
+            for node_id in self.node_ids:
+                uptime_percentage = self.get_uptime_percentage(node_id)
+                uptime_data = self.node_uptime.get(node_id, {"checks": 0, "online": 0})
+                
+                # Определяем цвет статуса
+                if uptime_percentage >= 99:
+                    status_emoji = "💎"
+                    status_text = "Отличный"
+                elif uptime_percentage >= 95:
+                    status_emoji = "🟢"
+                    status_text = "Хороший"
+                elif uptime_percentage >= 90:
+                    status_emoji = "🟡"
+                    status_text = "Удовлетворительный"
+                else:
+                    status_emoji = "🔴"
+                    status_text = "Плохой"
+                
+                embed.add_field(
+                    name=f"{status_emoji} Нода #{node_id}",
+                    value=(
+                        f"**Аптайм:** `{uptime_percentage:.2f}%`\n"
+                        f"**Статус:** {status_text}\n"
+                        f"**Проверок:** `{uptime_data['checks']}`\n"
+                        f"**Онлайн:** `{uptime_data['online']}`"
+                    ),
+                    inline=True
+                )
+            
             embed.set_footer(
-                text=f"Сброшено администратором {inter.author}",
-                icon_url=inter.author.display_avatar.url
+                text="Статистика обновляется каждые 30 секунд",
+                icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
             )
             
             await inter.response.send_message(embed=embed)
             
         except Exception as e:
             await inter.response.send_message(
-                f"❌ Произошла ошибка: {str(e)}",
+                f"❌ Ошибка: {str(e)}",
                 ephemeral=True
             )
+
+    @commands.slash_command(name="register", description="Зарегистрироваться в панели Pterodactyl")
+    async def register(self, inter: disnake.ApplicationCommandInteraction):
+        """Регистрация в панели Pterodactyl"""
+        modal = self.PterodactylRegisterModal(self)
+        await inter.response.send_modal(modal)
 
 def setup(bot):
-    bot.add_cog(InviteLogger(bot))
+    bot.add_cog(PterodactylStatus(bot))
