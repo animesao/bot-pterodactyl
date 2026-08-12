@@ -21,30 +21,30 @@ MAX_BACKUPS = 7  # Хранить последние 7 бэкапов
 
 class PterodactylStatus(commands.Cog):
     """Система мониторинга статуса Pterodactyl панели"""
-    
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.api_url = "https://panel.amethystcloud.online/api/application"
+        self.api_url = "https://panel.expension.online/api/application"
         self.api_key = os.getenv("PTERODACTYL_API_KEY", "")
-        
+
         # Загрузка конфигурации нод из .env
         # Формат: NODE_1=5:GER (Ryzen),NODE_2=9:GER2 (Epyc)
         self.nodes = {}  # {id: name}
         self.load_nodes_config()
-        
+
         self.status_channel_id = int(os.getenv("PTERODACTYL_STATUS_CHANNEL_ID", 0))
         self.status_message_id: Optional[int] = None
         self.discord_limit = int(os.getenv("PTERODACTYL_DISCORD_LIMIT", 1))
-        
+
         self.last_panel_status: Optional[bool] = None
         self.last_node_statuses: dict = {}
-        
+
         self.load_status_data()
-        
+
         if self.status_message_id and not self.status_channel_id:
             self.status_message_id = None
             self.save_status_data()
-    
+
     def load_nodes_config(self) -> None:
         """Загрузка конфигурации нод из .env"""
         # Пытаемся загрузить из переменных NODE_1, NODE_2, и т.д.
@@ -53,7 +53,7 @@ class PterodactylStatus(commands.Cog):
             node_config = os.getenv(f"PTERODACTYL_NODE_{node_index}")
             if not node_config:
                 break
-            
+
             # Формат: "5:GER (Ryzen)" или просто "5"
             if ":" in node_config:
                 node_id, node_name = node_config.split(":", 1)
@@ -62,16 +62,16 @@ class PterodactylStatus(commands.Cog):
                 # Если имя не указано, используем ID
                 node_id = node_config.strip()
                 self.nodes[node_id] = f"#{node_id}"
-            
+
             node_index += 1
-        
+
         # Если ноды не настроены, используем старый формат
         if not self.nodes:
             old_node_ids = os.getenv("PTERODACTYL_NODE_IDS", "5,9").split(",")
             for node_id in old_node_ids:
                 node_id = node_id.strip()
                 self.nodes[node_id] = f"#{node_id}"
-        
+
         print(f"✅ Загружено {len(self.nodes)} нод: {', '.join([f'{k}={v}' for k, v in self.nodes.items()])}")
 
     async def cog_load(self):
@@ -95,7 +95,7 @@ class PterodactylStatus(commands.Cog):
         """Сохранение данных о статусе в БД"""
         set_setting('status_message_id', self.status_message_id)
         set_setting('status_channel_id', self.status_channel_id)
-    
+
     def get_uptime_percentage(self, node_id: str) -> float:
         """Получение процента аптайма для ноды"""
         uptime_data = get_node_uptime(node_id)
@@ -108,13 +108,13 @@ class PterodactylStatus(commands.Cog):
         """Обновление статуса панели и нод"""
         if not self.status_message_id or not self.status_channel_id:
             return
-            
+
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json"
             }
-            
+
             async with aiohttp.ClientSession() as session:
                 # Проверка панели
                 panel_online = False
@@ -140,20 +140,20 @@ class PterodactylStatus(commands.Cog):
                     except Exception as e:
                         print(f"⚠️ Ошибка проверки ноды {node_id} ({self.nodes[node_id]}): {e}")
                         node_online = False
-                    
+
                     node_statuses[node_id] = node_online
                     update_node_uptime(node_id, node_online)  # Обновляем статистику аптайма
 
                 # Формирование embed
                 embed_color = disnake.Color.purple()
-                
+
                 panel_emoji = "💎" if panel_online else "🔴"
                 panel_text = "Работает стабильно" if panel_online else "Недоступна"
-                
+
                 node_lines = []
                 online_count = sum(1 for online in node_statuses.values() if online)
                 total_count = len(node_statuses)
-                
+
                 for node_id, online in node_statuses.items():
                     emoji = "💎" if online else "🔴"
                     status_bar = "▰▰▰▰▰▰▰▰▰▰" if online else "▱▱▱▱▱▱▱▱▱▱"
@@ -161,24 +161,24 @@ class PterodactylStatus(commands.Cog):
                     uptime = self.get_uptime_percentage(node_id)
                     node_name = self.nodes.get(node_id, f"#{node_id}")
                     node_lines.append(f"{emoji} `{node_name}` {status_bar} **{status}** • `{uptime:.1f}%`")
-                
+
                 embed = disnake.Embed(
                     title="💎 AmethystCloud • Панель Мониторинга",
                     color=embed_color
                 )
-                
+
                 embed.add_field(
                     name="🌐 Панель Управления",
                     value=f"\n{panel_emoji} **{panel_text}**\n\n━━━━━━━━━━━━━━━━━━━━",
                     inline=False
                 )
-                
+
                 embed.add_field(
                     name=f"⚡ Статус Нод ({online_count}/{total_count})",
                     value="\n━━━━━━━━━━━━━━━━━━━━\n".join(node_lines),
                     inline=False
                 )
-                
+
                 # Общий статус
                 all_online = panel_online and all(node_statuses.values())
                 if all_online:
@@ -190,7 +190,7 @@ class PterodactylStatus(commands.Cog):
                     overall_status = f"{bar} **{percentage}%**"
                 else:
                     overall_status = "▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱ **0%**"
-                
+
                 embed.add_field(
                     name="📊 Общая Производительность",
                     value=overall_status,
@@ -202,9 +202,9 @@ class PterodactylStatus(commands.Cog):
                     text=f"🕐 Обновлено: {current_time}",
                     icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
                 )
-                
+
                 embed.set_thumbnail(url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url)
-                
+
                 # Обновление сообщения
                 channel = self.bot.get_channel(self.status_channel_id)
                 if channel:
@@ -238,7 +238,7 @@ class PterodactylStatus(commands.Cog):
             timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
             backup_filename = f"amethystcloud_backup_{timestamp}.db"
             backup_path = os.path.join(BACKUP_DIR, backup_filename)
-            
+
             shutil.copy2(DB_PATH, backup_path)
             print(f"✅ Авто-бэкап создан: {backup_filename}")
             return backup_path
@@ -251,22 +251,22 @@ class PterodactylStatus(commands.Cog):
         try:
             if not os.path.exists(BACKUP_DIR):
                 return
-            
+
             # Получаем список бэкапов
             backups = []
             for f in os.listdir(BACKUP_DIR):
                 if f.startswith('amethystcloud_backup_') and f.endswith('.db'):
                     filepath = os.path.join(BACKUP_DIR, f)
                     backups.append((filepath, os.path.getmtime(filepath)))
-            
+
             # Сортируем по дате (новые первые)
             backups.sort(key=lambda x: x[1], reverse=True)
-            
+
             # Удаляем старые
             for filepath, _ in backups[MAX_BACKUPS:]:
                 os.remove(filepath)
                 print(f"🗑️ Удален старый бэкап: {os.path.basename(filepath)}")
-                
+
         except Exception as e:
             print(f"❌ Ошибка очистки бэкапов: {e}")
 
@@ -276,16 +276,16 @@ class PterodactylStatus(commands.Cog):
         try:
             # Создаем бэкап
             backup_path = self.create_backup()
-            
+
             if backup_path:
                 # Удаляем старые бэкапы
                 self.cleanup_old_backups()
-                
+
                 # Считаем бэкапы
-                backups_count = len([f for f in os.listdir(BACKUP_DIR) 
+                backups_count = len([f for f in os.listdir(BACKUP_DIR)
                                     if f.startswith('amethystcloud_backup_') and f.endswith('.db')])
                 print(f"✅ Авто-бэкап завершен. Всего бэкапов: {backups_count}/{MAX_BACKUPS}")
-                
+
         except Exception as e:
             print(f"❌ Ошибка в daily_backup: {e}")
             print(traceback.format_exc())
@@ -298,7 +298,7 @@ class PterodactylStatus(commands.Cog):
 
     class PterodactylRegisterModal(disnake.ui.Modal):
         """Модальное окно регистрации в Pterodactyl"""
-        
+
         def __init__(self, cog: 'PterodactylStatus'):
             self.cog = cog
             components = [
@@ -340,7 +340,7 @@ class PterodactylStatus(commands.Cog):
             email = inter.text_values["email"]
             password = inter.text_values["password"]
             discord_id = str(inter.author.id)
-            
+
             try:
                 async with aiohttp.ClientSession() as session:
                     headers = {
@@ -348,7 +348,7 @@ class PterodactylStatus(commands.Cog):
                         "Content-Type": "application/json",
                         "Accept": "application/json"
                     }
-                    
+
                     check_url_email = f"{self.cog.api_url}/users?filter[email]={email}"
                     async with session.get(check_url_email, headers=headers) as check_resp_email:
                         if check_resp_email.status == 200:
@@ -359,7 +359,7 @@ class PterodactylStatus(commands.Cog):
                                     ephemeral=True
                                 )
                                 return
-                    
+
                     check_url_id = f"{self.cog.api_url}/users?filter[first_name]={discord_id}"
                     async with session.get(check_url_id, headers=headers) as check_resp_id:
                         if check_resp_id.status == 200:
@@ -372,7 +372,7 @@ class PterodactylStatus(commands.Cog):
                                     ephemeral=True
                                 )
                                 return
-                    
+
                     payload = {
                         "username": username,
                         "email": email,
@@ -380,7 +380,7 @@ class PterodactylStatus(commands.Cog):
                         "last_name": "discord",
                         "password": password
                     }
-                    
+
                     async with session.post(f"{self.cog.api_url}/users", headers=headers, json=payload) as resp:
                         if resp.status == 201:
                             success_embed = disnake.Embed(
@@ -393,7 +393,7 @@ class PterodactylStatus(commands.Cog):
                             success_embed.add_field(name="📧 Email", value=f"`{email}`", inline=True)
                             success_embed.add_field(name="🔑 Пароль", value=f"||`{password}`||", inline=False)
                             success_embed.set_footer(text="AmethystCloud Pterodactyl")
-                            
+
                             await inter.response.send_message(embed=success_embed, ephemeral=True)
                         else:
                             data = await resp.text()
@@ -412,16 +412,16 @@ class PterodactylStatus(commands.Cog):
     async def setup_pterodactyl_status(self, inter: disnake.ApplicationCommandInteraction):
         """Настройка панели мониторинга"""
         embed = disnake.Embed(
-            title="💎 AmethystCloud • Панель Мониторинга", 
-            description="⏳ Инициализация системы мониторинга...\n`████████░░░░░░░░░░░░` 40%", 
+            title="💎 AmethystCloud • Панель Мониторинга",
+            description="⏳ Инициализация системы мониторинга...\n`████████░░░░░░░░░░░░` 40%",
             color=disnake.Color.purple()
         )
-        
+
         msg = await inter.channel.send(embed=embed)
         self.status_message_id = msg.id
         self.status_channel_id = inter.channel.id
         self.save_status_data()
-        
+
         success_embed = disnake.Embed(
             title="✅ Успешно!",
             description="Панель мониторинга AmethystCloud успешно инициализирована!",
@@ -443,11 +443,11 @@ class PterodactylStatus(commands.Cog):
                         await msg.delete()
                 except:
                     pass
-            
+
             # Сбрасываем данные
             self.status_message_id = None
             self.save_status_data()
-            
+
             success_embed = disnake.Embed(
                 title="✅ Сброшено!",
                 description="Панель мониторинга сброшена. Используйте `/setup_pterodactyl_status` для создания новой.",
@@ -467,7 +467,7 @@ class PterodactylStatus(commands.Cog):
         try:
             # Сбрасываем данные аптайма в БД
             reset_node_uptime()
-            
+
             embed = disnake.Embed(
                 title="✅ Статистика сброшена!",
                 description="Статистика аптайма всех нод была сброшена.",
@@ -489,11 +489,11 @@ class PterodactylStatus(commands.Cog):
                 color=disnake.Color.purple(),
                 timestamp=datetime.datetime.utcnow()
             )
-            
+
             for node_id, node_name in self.nodes.items():
                 uptime_percentage = self.get_uptime_percentage(node_id)
                 uptime_data = get_node_uptime(node_id)
-                
+
                 # Определяем цвет статуса
                 if uptime_percentage >= 99:
                     status_emoji = "💎"
@@ -507,7 +507,7 @@ class PterodactylStatus(commands.Cog):
                 else:
                     status_emoji = "🔴"
                     status_text = "Плохой"
-                
+
                 embed.add_field(
                     name=f"{status_emoji} {node_name}",
                     value=(
@@ -518,14 +518,14 @@ class PterodactylStatus(commands.Cog):
                     ),
                     inline=True
                 )
-            
+
             embed.set_footer(
                 text="Статистика обновляется каждые 30 секунд",
                 icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
             )
-            
+
             await inter.response.send_message(embed=embed)
-            
+
         except Exception as e:
             await inter.response.send_message(
                 f"❌ Ошибка: {str(e)}",
@@ -538,7 +538,7 @@ class PterodactylStatus(commands.Cog):
         """Показать статистику базы данных"""
         try:
             stats = get_db_stats()
-            
+
             # Форматируем размер БД
             db_size = stats["db_size"]
             if db_size < 1024:
@@ -547,20 +547,20 @@ class PterodactylStatus(commands.Cog):
                 size_str = f"{db_size / 1024:.2f} KB"
             else:
                 size_str = f"{db_size / (1024 * 1024):.2f} MB"
-            
+
             embed = disnake.Embed(
                 title="📊 AmethystCloud • Статистика БД",
                 description="Текущее состояние базы данных бота",
                 color=disnake.Color.purple(),
                 timestamp=datetime.datetime.utcnow()
             )
-            
+
             embed.add_field(
                 name="⚙️ Настройки",
                 value=f"`{stats['settings']}` записей",
                 inline=True
             )
-            
+
             embed.add_field(
                 name="📨 Приглашения",
                 value=(
@@ -570,7 +570,7 @@ class PterodactylStatus(commands.Cog):
                 ),
                 inline=True
             )
-            
+
             embed.add_field(
                 name="🎫 Тикеты",
                 value=(
@@ -580,26 +580,26 @@ class PterodactylStatus(commands.Cog):
                 ),
                 inline=True
             )
-            
+
             embed.add_field(
                 name="🖥️ Pterodactyl",
                 value=f"`{stats['node_uptime']}` нод отслеживается",
                 inline=True
             )
-            
+
             embed.add_field(
                 name="💾 Размер БД",
                 value=f"`{size_str}`",
                 inline=True
             )
-            
+
             embed.set_footer(
                 text="AmethystCloud Database Stats",
                 icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
             )
-            
+
             await inter.response.send_message(embed=embed, ephemeral=True)
-            
+
         except Exception as e:
             await inter.response.send_message(
                 f"❌ Ошибка: {str(e)}",
@@ -612,15 +612,15 @@ class PterodactylStatus(commands.Cog):
         """Создать бэкап базы данных и отправить файл"""
         try:
             await inter.response.defer(ephemeral=True)
-            
+
             # Формируем имя файла с датой
             timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
             backup_filename = f"amethystcloud_backup_{timestamp}.db"
-            
+
             # Копируем БД во временный файл
             import shutil
             shutil.copy2(DB_PATH, backup_filename)
-            
+
             # Получаем размер файла
             file_size = os.path.getsize(backup_filename)
             if file_size < 1024:
@@ -629,7 +629,7 @@ class PterodactylStatus(commands.Cog):
                 size_str = f"{file_size / 1024:.2f} KB"
             else:
                 size_str = f"{file_size / (1024 * 1024):.2f} MB"
-            
+
             # Отправляем файл
             embed = disnake.Embed(
                 title="💾 AmethystCloud • Бэкап БД",
@@ -643,17 +643,17 @@ class PterodactylStatus(commands.Cog):
                 text="AmethystCloud Backup",
                 icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
             )
-            
+
             # Отправляем файл как вложение
             await inter.followup.send(
                 embed=embed,
                 file=disnake.File(backup_filename, filename=backup_filename),
                 ephemeral=True
             )
-            
+
             # Удаляем временный файл
             os.remove(backup_filename)
-            
+
         except Exception as e:
             await inter.followup.send(
                 f"❌ Ошибка при создании бэкапа: {str(e)}",
@@ -666,7 +666,7 @@ class PterodactylStatus(commands.Cog):
         """Показать список всех бэкапов"""
         try:
             await inter.response.defer(ephemeral=True)
-            
+
             if not os.path.exists(BACKUP_DIR):
                 embed = disnake.Embed(
                     title="📁 AmethystCloud • Список Бэкапов",
@@ -676,7 +676,7 @@ class PterodactylStatus(commands.Cog):
                 )
                 await inter.followup.send(embed=embed, ephemeral=True)
                 return
-            
+
             # Получаем список бэкапов
             backups = []
             for f in os.listdir(BACKUP_DIR):
@@ -685,10 +685,10 @@ class PterodactylStatus(commands.Cog):
                     mtime = os.path.getmtime(filepath)
                     size = os.path.getsize(filepath)
                     backups.append((f, mtime, size))
-            
+
             # Сортируем по дате (новые первые)
             backups.sort(key=lambda x: x[1], reverse=True)
-            
+
             if not backups:
                 embed = disnake.Embed(
                     title="📁 AmethystCloud • Список Бэкапов",
@@ -698,61 +698,61 @@ class PterodactylStatus(commands.Cog):
                 )
                 await inter.followup.send(embed=embed, ephemeral=True)
                 return
-            
+
             embed = disnake.Embed(
                 title="📁 AmethystCloud • Список Бэкапов",
                 description=f"Найдено бэкапов: **{len(backups)}** (макс. {MAX_BACKUPS})",
                 color=disnake.Color.purple(),
                 timestamp=datetime.datetime.utcnow()
             )
-            
+
             # Формируем список
             backup_lines = []
             total_size = 0
-            
+
             for i, (filename, mtime, size) in enumerate(backups[:10], 1):  # Показываем макс. 10
                 dt = datetime.datetime.fromtimestamp(mtime)
                 date_str = dt.strftime('%d.%m.%Y %H:%M')
-                
+
                 if size < 1024:
                     size_str = f"{size} B"
                 elif size < 1024 * 1024:
                     size_str = f"{size / 1024:.2f} KB"
                 else:
                     size_str = f"{size / (1024 * 1024):.2f} MB"
-                
+
                 emoji = "🆕" if i == 1 else "💾"
                 backup_lines.append(f"{emoji} `{filename}`\n   📅 {date_str} • 📏 {size_str}")
                 total_size += size
-            
+
             if len(backups) > 10:
                 backup_lines.append(f"\n... и еще {len(backups) - 10} бэкапов")
-            
+
             embed.add_field(
                 name="📋 Бэкапы",
                 value="\n".join(backup_lines),
                 inline=False
             )
-            
+
             # Общий размер
             if total_size < 1024 * 1024:
                 total_str = f"{total_size / 1024:.2f} KB"
             else:
                 total_str = f"{total_size / (1024 * 1024):.2f} MB"
-            
+
             embed.add_field(
                 name="📊 Статистика",
                 value=f"**Всего:** {len(backups)} бэкапов\n**Общий размер:** {total_str}\n**Хранится:** {MAX_BACKUPS} последних",
                 inline=True
             )
-            
+
             embed.set_footer(
                 text="AmethystCloud Backup List",
                 icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
             )
-            
+
             await inter.followup.send(embed=embed, ephemeral=True)
-            
+
         except Exception as e:
             await inter.followup.send(
                 f"❌ Ошибка: {str(e)}",
@@ -765,7 +765,7 @@ class PterodactylStatus(commands.Cog):
         """Удалить конкретный бэкап по имени файла"""
         try:
             await inter.response.defer(ephemeral=True)
-            
+
             # Проверяем что файл существует и это бэкап
             if not filename.startswith('amethystcloud_backup_') or not filename.endswith('.db'):
                 await inter.followup.send(
@@ -773,16 +773,16 @@ class PterodactylStatus(commands.Cog):
                     ephemeral=True
                 )
                 return
-            
+
             filepath = os.path.join(BACKUP_DIR, filename)
-            
+
             if not os.path.exists(filepath):
                 await inter.followup.send(
                     f"❌ Файл `{filename}` не найден!",
                     ephemeral=True
                 )
                 return
-            
+
             # Получаем размер файла перед удалением
             file_size = os.path.getsize(filepath)
             if file_size < 1024:
@@ -791,14 +791,14 @@ class PterodactylStatus(commands.Cog):
                 size_str = f"{file_size / 1024:.2f} KB"
             else:
                 size_str = f"{file_size / (1024 * 1024):.2f} MB"
-            
+
             # Удаляем файл
             os.remove(filepath)
-            
+
             # Считаем оставшиеся бэкапы
-            remaining = len([f for f in os.listdir(BACKUP_DIR) 
+            remaining = len([f for f in os.listdir(BACKUP_DIR)
                             if f.startswith('amethystcloud_backup_') and f.endswith('.db')]) if os.path.exists(BACKUP_DIR) else 0
-            
+
             embed = disnake.Embed(
                 title="🗑️ AmethystCloud • Бэкап Удален",
                 description="Бэкап успешно удален!",
@@ -812,9 +812,9 @@ class PterodactylStatus(commands.Cog):
                 text="AmethystCloud Backup Delete",
                 icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
             )
-            
+
             await inter.followup.send(embed=embed, ephemeral=True)
-            
+
         except Exception as e:
             await inter.followup.send(
                 f"❌ Ошибка при удалении: {str(e)}",
@@ -827,7 +827,7 @@ class PterodactylStatus(commands.Cog):
         """Восстановить базу данных из загруженного бэкапа"""
         try:
             await inter.response.defer(ephemeral=True)
-            
+
             # Проверяем расширение файла
             if not file.filename.endswith('.db'):
                 await inter.followup.send(
@@ -835,11 +835,11 @@ class PterodactylStatus(commands.Cog):
                     ephemeral=True
                 )
                 return
-            
+
             # Скачиваем файл
             temp_path = f"temp_restore_{file.filename}"
             await file.save(temp_path)
-            
+
             # Проверяем что это валидный SQLite файл
             import sqlite3
             try:
@@ -850,10 +850,10 @@ class PterodactylStatus(commands.Cog):
                 ).fetchall()
                 table_names = [t[0] for t in tables]
                 test_conn.close()
-                
+
                 required_tables = ['settings', 'invites', 'ticket_logs']
                 missing = [t for t in required_tables if t not in table_names]
-                
+
                 if missing:
                     os.remove(temp_path)
                     await inter.followup.send(
@@ -861,7 +861,7 @@ class PterodactylStatus(commands.Cog):
                         ephemeral=True
                     )
                     return
-                    
+
             except Exception as e:
                 os.remove(temp_path)
                 await inter.followup.send(
@@ -869,21 +869,21 @@ class PterodactylStatus(commands.Cog):
                     ephemeral=True
                 )
                 return
-            
+
             # Создаем бэкап текущей БД перед восстановлением
             import shutil
             backup_before = f"backup_before_restore_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
             shutil.copy2(DB_PATH, backup_before)
-            
+
             # Закрываем текущее соединение
             close_connection()
-            
+
             # Заменяем файл БД
             shutil.move(temp_path, DB_PATH)
-            
+
             # Переинициализируем соединение
             reinitialize_connection()
-            
+
             # Формируем ответ
             file_size = os.path.getsize(DB_PATH)
             if file_size < 1024:
@@ -892,7 +892,7 @@ class PterodactylStatus(commands.Cog):
                 size_str = f"{file_size / 1024:.2f} KB"
             else:
                 size_str = f"{file_size / (1024 * 1024):.2f} MB"
-            
+
             embed = disnake.Embed(
                 title="✅ AmethystCloud • БД Восстановлена",
                 description="База данных успешно восстановлена из бэкапа!",
@@ -910,9 +910,9 @@ class PterodactylStatus(commands.Cog):
                 text="AmethystCloud Restore",
                 icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
             )
-            
+
             await inter.followup.send(embed=embed, ephemeral=True)
-            
+
         except Exception as e:
             try:
                 if os.path.exists(temp_path):
@@ -943,23 +943,23 @@ class PterodactylStatus(commands.Cog):
 
     class AdminPanelView(disnake.ui.View):
         """Панель управления для администраторов"""
-        
+
         def __init__(self, cog: 'PterodactylStatus'):
             super().__init__(timeout=None)
             self.cog = cog
             self._update_buttons()
-        
+
         def _update_buttons(self):
             """Обновить кнопки в зависимости от состояния"""
             self.clear_items()
-            
+
             reg_enabled = is_registration_enabled()
-            
+
             # Кнопка toggle регистрации
             reg_emoji = "✅" if reg_enabled else "❌"
             reg_label = "Выключить регистрацию" if reg_enabled else "Включить регистрацию"
             reg_style = disnake.ButtonStyle.danger if reg_enabled else disnake.ButtonStyle.success
-            
+
             reg_button = disnake.ui.Button(
                 label=reg_label,
                 emoji=reg_emoji,
@@ -967,7 +967,7 @@ class PterodactylStatus(commands.Cog):
                 custom_id="admin_toggle_registration"
             )
             self.add_item(reg_button)
-            
+
             # Кнопка toggle лимита Discord
             limit = int(get_setting("discord_limit", 1))
             limit_label = f"Лимит аккаунтов: {limit}"
@@ -978,7 +978,7 @@ class PterodactylStatus(commands.Cog):
                 custom_id="admin_toggle_limit"
             )
             self.add_item(limit_button)
-            
+
             # Кнопка обновления
             refresh_button = disnake.ui.Button(
                 label="Обновить",
@@ -992,18 +992,18 @@ class PterodactylStatus(commands.Cog):
         """Создать embed для админ-панели"""
         reg_enabled = is_registration_enabled()
         discord_limit = int(get_setting("discord_limit", 1))
-        
+
         status_emoji = "✅" if reg_enabled else "❌"
         status_text = "Включена" if reg_enabled else "Выключена"
         status_color = disnake.Color.green() if reg_enabled else disnake.Color.red()
-        
+
         embed = disnake.Embed(
             title="⚙️ AmethystCloud • Панель Администратора",
             description="Управление настройками бота и Pterodactyl панели",
             color=status_color,
             timestamp=datetime.datetime.utcnow()
         )
-        
+
         embed.add_field(
             name="🔐 Регистрация",
             value=f"**Статус:** {status_emoji} {status_text}\n"
@@ -1011,7 +1011,7 @@ class PterodactylStatus(commands.Cog):
                   f"*Нажмите кнопку ниже для переключения*",
             inline=False
         )
-        
+
         embed.add_field(
             name="📋 Доступные команды",
             value=(
@@ -1022,12 +1022,12 @@ class PterodactylStatus(commands.Cog):
             ),
             inline=False
         )
-        
+
         embed.set_footer(
             text="AmethystCloud Admin Panel",
             icon_url=self.bot.user.avatar.url if self.bot.user.avatar else self.bot.user.default_avatar.url
         )
-        
+
         return embed
 
     @commands.slash_command(
@@ -1049,12 +1049,12 @@ class PterodactylStatus(commands.Cog):
                 # Переключение регистрации
                 current = is_registration_enabled()
                 set_registration_enabled(not current)
-                
+
                 # Обновляем панель
                 panel_embed = self._build_admin_embed()
                 view = self.AdminPanelView(self)
                 await inter.response.edit_message(embed=panel_embed, view=view)
-                
+
             elif inter.component.custom_id == "admin_toggle_limit":
                 # Циклическое переключение лимита: 1 -> 2 -> 3 -> 5 -> 1
                 current_limit = int(get_setting("discord_limit", 1))
@@ -1062,12 +1062,12 @@ class PterodactylStatus(commands.Cog):
                 idx = limits.index(current_limit) if current_limit in limits else 0
                 new_limit = limits[(idx + 1) % len(limits)]
                 set_setting("discord_limit", new_limit)
-                
+
                 # Обновляем панель
                 panel_embed = self._build_admin_embed()
                 view = self.AdminPanelView(self)
                 await inter.response.edit_message(embed=panel_embed, view=view)
-                
+
             elif inter.component.custom_id == "admin_refresh_panel":
                 # Обновление панели
                 panel_embed = self._build_admin_embed()
