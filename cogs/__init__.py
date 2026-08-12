@@ -1,0 +1,1 @@
+# Pterodactyl bot cogs package

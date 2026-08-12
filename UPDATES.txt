@@ -1,0 +1,53 @@
+```
+================================================================
+                     bot-pterodacty UPDATES
+================================================================
+
+[RU] Русская версия
+-------------------
+Версия 1.2.0 (последнее обновление)
+
+* НОВЫЕ ФУНКЦИИ *
+- Добавлена команда /register для:
+  * Привязки Discord-бота к панели Pterodactyl
+  * Авторизации через GitHub OAuth 2.0
+  * Автоматической настройки прав доступа
+- Реализован мониторинг серверов через /status
+
+* УЛУЧШЕНИЯ *
+- Оптимизирована интеграция с GitHub API
+- Обновлен интерфейс Slash-команд
+- Добавлен русско-английский переключатель
+
+* ИСПРАВЛЕНИЯ *
+- Устранено 12 критических ошибок
+- Исправлена работа автодополнения команд
+- Оптимизировано использование памяти
+
+================================================================
+
+[EN] English Version
+-------------------
+Version 1.2.0 (Latest Update)
+
+* NEW FEATURES *
+- Added /register command for:
+  * Linking Discord bot to Pterodactyl panel
+  * GitHub OAuth 2.0 authorization
+  * Automatic permissions setup
+- Implemented server monitoring via /status
+
+* IMPROVEMENTS *
+- Optimized GitHub API integration
+- Updated Slash commands interface
+- Added English-Russian language toggle
+
+* FIXES *
+- Fixed 12 critical bugs
+- Improved command autocomplete
+- Optimized memory usage
+
+================================================================
+2025 | Project maintained by animesao
+================================================================
+```
