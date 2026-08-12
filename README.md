@@ -131,6 +131,7 @@ bot-pterodactyl/
 ├── .env                    # Environment variables (not in git)
 ├── .env.example            # Environment template
 ├── .gitignore
+├── CONTRIBUTING.md         # Contribution guidelines
 ├── cogs/
 │   ├── __init__.py
 │   ├── database.py         # SQLite database module
@@ -208,6 +209,12 @@ cogs/bot_settings.db
 - **Server restriction**: Set `ALLOWED_GUILD_ID` to restrict bot to one server
 - **Auto-leave**: Bot automatically leaves unauthorized servers
 - **Admin-only commands**: Database and backup commands require admin role
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
