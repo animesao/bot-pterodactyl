@@ -131,7 +131,9 @@ bot-pterodactyl/
 ├── .env                    # Environment variables (not in git)
 ├── .env.example            # Environment template
 ├── .gitignore
+├── README.md               # Project documentation
 ├── CONTRIBUTING.md         # Contribution guidelines
+├── CHANGELOG.md            # Version history
 ├── cogs/
 │   ├── __init__.py
 │   ├── database.py         # SQLite database module
@@ -215,6 +217,12 @@ cogs/bot_settings.db
 ## 🤝 Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## 📋 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for full version history and updates.
 
 ---
 
